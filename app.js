@@ -1033,12 +1033,14 @@ function getQuestCategoryFlavor(category) {
   if (category === "challenge") {
     return {
       kicker: "追加依頼",
-      empty: "今できるチャレンジ依頼はありません。",
+      emptyTitle: "追加依頼はまだありません",
+      emptyText: "余力がある日に挑戦できます。ギルドマスターに依頼を作ってもらいましょう。",
     };
   }
   return {
     kicker: "今日の任務",
-    empty: "今日の毎日クエストはありません。",
+    emptyTitle: "任務はまだありません",
+    emptyText: "ギルドマスターに今日の任務を作ってもらいましょう。",
   };
 }
 
@@ -2793,14 +2795,14 @@ function renderQuests() {
     if (message) {
       if (questCategory === "daily_required") {
         if (totalCount === 0) {
-          message.textContent = "今日の毎日クエストはありません。";
+          message.textContent = "ギルドマスターに任務を作ってもらいましょう。";
         } else if (isComplete) {
-          message.textContent = "今日の分、達成！";
+          message.textContent = "今日の分、達成！ よくがんばりました。";
         } else {
           message.textContent = `あと${totalCount - completedCount}件で今日の分が完了です。`;
         }
       } else if (totalCount === 0) {
-        message.textContent = "今できる追加依頼はありません。";
+        message.textContent = "余力がある日に挑戦できます。";
       } else if (isComplete) {
         message.textContent = "追加依頼も達成しました。";
       } else {
@@ -2815,9 +2817,14 @@ function renderQuests() {
   hasRenderedQuestCategoryProgress = true;
 
   if (visibleQuests.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "quest-empty";
-    empty.textContent = categoryFlavor.empty;
+    const empty = document.createElement("article");
+    empty.className = `quest-empty-card quest-empty-${category}`;
+    empty.innerHTML = `
+      <span>${categoryFlavor.kicker}</span>
+      <h3>${categoryFlavor.emptyTitle}</h3>
+      <p>${categoryFlavor.emptyText}</p>
+      <button type="button" data-open-guild>ギルドへ行く</button>
+    `;
     list.append(empty);
     return;
   }
@@ -2888,6 +2895,7 @@ function renderHomeDailyMission() {
   const count = document.querySelector("[data-home-daily-count]");
   const bar = document.querySelector("[data-home-daily-bar]");
   const message = document.querySelector("[data-home-daily-message]");
+  const action = document.querySelector("[data-home-daily-mission] [data-open-guild]");
 
   if (count) {
     count.textContent = `${completedCount} / ${totalCount}`;
@@ -2897,12 +2905,15 @@ function renderHomeDailyMission() {
   }
   if (message) {
     if (totalCount === 0) {
-      message.textContent = "今日の毎日クエストはありません。";
+      message.textContent = "任務はまだありません。ギルドマスターに今日の任務を作ってもらいましょう。";
     } else if (isComplete) {
-      message.textContent = "今日の分、達成！";
+      message.textContent = "今日の分、達成！ よくがんばりました。";
     } else {
       message.textContent = `あと${remainingCount}件で今日の任務が完了です。`;
     }
+  }
+  if (action) {
+    action.hidden = totalCount !== 0;
   }
 
   card.classList.toggle("is-complete", isComplete);
@@ -3704,6 +3715,16 @@ document.addEventListener("click", (event) => {
   const parentNoteClearButton = event.target.closest("[data-parent-note-clear]");
   if (parentNoteClearButton) {
     clearParentNote();
+    return;
+  }
+
+  const openGuildButton = event.target.closest("[data-open-guild]");
+  if (openGuildButton) {
+    if (!isParentUnlocked) {
+      showParentAuth();
+      return;
+    }
+    switchScreen("admin");
     return;
   }
 

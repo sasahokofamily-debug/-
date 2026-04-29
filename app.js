@@ -5,6 +5,9 @@ const REWARDS_KEY = "sora_guild_app_rewards_dev";
 const REWARD_HISTORY_KEY = "sora_guild_app_reward_history_dev";
 const ACHIEVEMENTS_KEY = "guildAchievements";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
+// 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
+const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
+const WEEKLY_REPORT_SENT_WEEK_KEY = "sora_guild_app_last_weekly_report_sent_week_dev";
 const isTestMode = false;
 const PARENT_PIN = "1234";
 const LOGIN_BONUS_GOLD = 10;
@@ -403,6 +406,20 @@ function getWeekKey(date = new Date()) {
   return `${weekYear}-${weekMonth}-${weekDay}`;
 }
 
+function getWeekEndKey(weekStartKey = getWeekKey()) {
+  const parts = String(weekStartKey).split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) {
+    return "";
+  }
+
+  const weekEnd = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+  const year = weekEnd.getUTCFullYear();
+  const month = String(weekEnd.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(weekEnd.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getJapanDayOfWeek(date = new Date()) {
   const { year, month, day } = getJapanDateParts(date);
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
@@ -764,6 +781,85 @@ function notifyWeeklyReport() {
     console.warn("週間レポート送信に失敗しました", error);
     return false;
   });
+}
+
+function createWeeklyReportPayload() {
+  const report = getWeeklyReport();
+  const stats = report.stats;
+  const weekStart = getWeekKey();
+
+  return {
+    weekStart,
+    weekEnd: getWeekEndKey(weekStart),
+    questsCompleted: report.completed,
+    xpEarned: report.xp,
+    goldEarned: report.gold,
+    strGain: stats.STR || 0,
+    intGain: stats.INT || 0,
+    endGain: stats.END || 0,
+    dexGain: stats.DEX || 0,
+    loginStreak: progress.loginStreak || 0,
+  };
+}
+
+function setWeeklyReportSendMessage(message, isError = false) {
+  const elements = document.querySelectorAll("[data-weekly-send-message]");
+  if (elements.length === 0) {
+    return;
+  }
+
+  elements.forEach((element) => {
+    element.textContent = message;
+    element.classList.toggle("is-error", isError);
+  });
+}
+
+function sendWeeklyReportToGas(report) {
+  if (!WEEKLY_REPORT_GAS_URL) {
+    return Promise.reject(new Error("週間レポートGAS URLが未設定です"));
+  }
+
+  return fetch(WEEKLY_REPORT_GAS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(report),
+  }).then((response) => {
+    if (!response.ok) {
+      throw new Error(`週間レポート送信に失敗しました: ${response.status}`);
+    }
+    return true;
+  });
+}
+
+function sendWeeklyReport({ manual = false } = {}) {
+  const weekStart = getWeekKey();
+  if (!manual && getJapanDayOfWeek() !== 0) {
+    return Promise.resolve(false);
+  }
+  if (!manual && localStorage.getItem(WEEKLY_REPORT_SENT_WEEK_KEY) === weekStart) {
+    return Promise.resolve(false);
+  }
+
+  const report = createWeeklyReportPayload();
+  return sendWeeklyReportToGas(report)
+    .then(() => {
+      if (!manual) {
+        localStorage.setItem(WEEKLY_REPORT_SENT_WEEK_KEY, weekStart);
+      }
+      if (manual) {
+        setWeeklyReportSendMessage("週間レポートを送信しました");
+      }
+      return true;
+    })
+    .catch((error) => {
+      console.warn("週間レポート送信に失敗しました", error);
+      if (manual) {
+        setWeeklyReportSendMessage("送信に失敗しました", true);
+      }
+      return false;
+    });
 }
 
 function getAllQuests() {
@@ -1407,7 +1503,7 @@ function completeQuest(questId, sourceElement) {
 
   saveProgress();
   render();
-  notifyWeeklyReport();
+  sendWeeklyReport();
   playQuestCompleteAnimation(quest.id);
   queueXpChangeAnimation(getLevel(progress.xp) > previousLevel ? 0 : previousLevelProgress);
   showRewardFeedback(quest);
@@ -3043,6 +3139,20 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const weeklyReportSendButton = event.target.closest("[data-weekly-report-send]");
+  if (weeklyReportSendButton) {
+    if (!isParentMode) {
+      setWeeklyReportSendMessage("親モード中のみ送信できます", true);
+      return;
+    }
+    weeklyReportSendButton.disabled = true;
+    setWeeklyReportSendMessage("送信しています...");
+    sendWeeklyReport({ manual: true }).finally(() => {
+      weeklyReportSendButton.disabled = false;
+    });
+    return;
+  }
+
   const toggleQuestCreateButton = event.target.closest("[data-toggle-quest-create]");
   if (toggleQuestCreateButton) {
     if (!isParentUnlocked) {
@@ -3137,7 +3247,7 @@ render();
 if (loginBonusResult.granted) {
   showLoginBonusToast(loginBonusResult);
 }
-notifyWeeklyReport();
+sendWeeklyReport();
 const startupAchievements = checkAchievements({ showToast: false });
 if (startupAchievements.length > 0) {
   window.setTimeout(() => showAchievementToast(startupAchievements), loginBonusResult.granted ? 2200 : 350);

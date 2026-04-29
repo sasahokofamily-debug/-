@@ -219,6 +219,10 @@
                 <strong data-weekly-login-streak>0日</strong>
               </article>
             </div>
+            <div class="weekly-report-send" data-parent-mode-only hidden>
+              <button class="quest-manage-button" type="button" data-weekly-report-send>週間レポートを送信</button>
+              <p class="form-message weekly-send-message" data-weekly-send-message aria-live="polite"></p>
+            </div>
           </section>
 
           <section class="growth-panel" aria-labelledby="growth-streak-title">
@@ -406,6 +410,12 @@
           <section class="future-form quest-manage-panel" aria-labelledby="quest-manage-title">
             <h3 id="quest-manage-title">クエスト一覧</h3>
             <div class="managed-quest-list" data-managed-quest-list></div>
+          </section>
+          <section class="future-form weekly-report-admin-panel" data-parent-mode-only aria-labelledby="weekly-report-admin-title" hidden>
+            <h3 id="weekly-report-admin-title">週間レポート送信</h3>
+            <p>現在の週間レポートをGoogle Apps Scriptへ送信します。GAS連携のテストに使えます。</p>
+            <button class="quest-manage-button" type="button" data-weekly-report-send>週間レポートを送信</button>
+            <p class="form-message weekly-send-message" data-weekly-send-message aria-live="polite"></p>
           </section>
           <form class="future-form reward-create-form" data-reward-create-form aria-label="ご褒美追加フォーム">
             <h3>ご褒美追加</h3>

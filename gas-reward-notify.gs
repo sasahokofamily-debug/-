@@ -1,5 +1,19 @@
 const NOTIFY_EMAIL = "sasahokofamily@gmail.com";
+const WEEKLY_REPORT_SPREADSHEET_ID = "";
 const WEEKLY_REPORT_PROPERTY_KEY = "WEEKLY_REPORT_DATA";
+const WEEKLY_REPORT_HEADERS = [
+  "保存日時",
+  "週の開始日",
+  "週の終了日",
+  "クエスト達成数",
+  "獲得XP",
+  "獲得Gold",
+  "STR増加",
+  "INT増加",
+  "END増加",
+  "DEX増加",
+  "連続ログイン日数",
+];
 
 function doPost(e) {
   try {
@@ -75,10 +89,12 @@ function saveWeeklyReport(data) {
     statGrowth: data.statGrowth || formatStatGrowth(normalizeStats(data.stats)),
     loginStreak: Number(data.loginStreak || 0),
     weekStart: data.weekStart || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd"),
+    weekEnd: getWeekEndKey(data.weekStart || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd")),
     savedAt: Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM/dd HH:mm"),
   };
 
   PropertiesService.getScriptProperties().setProperty(WEEKLY_REPORT_PROPERTY_KEY, JSON.stringify(report));
+  saveWeeklyReportToSheet(report);
 }
 
 function sendWeeklyReportEmail() {
@@ -94,11 +110,13 @@ function sendWeeklyReportEmail() {
     statGrowth: "まだありません",
     loginStreak: 0,
     weekStart: Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd"),
+    weekEnd: getWeekEndKey(Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd")),
     savedAt: Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM/dd HH:mm"),
   };
   const isCurrentWeek = safeReport.weekStart === currentWeekStart;
   if (!isCurrentWeek) {
     safeReport.weekStart = currentWeekStart;
+    safeReport.weekEnd = getWeekEndKey(currentWeekStart);
   }
   const hasRecord = isCurrentWeek && (safeReport.completed > 0 || safeReport.xp > 0 || safeReport.gold > 0);
   const subject = "【ギルド報告】今週の冒険記録";
@@ -137,6 +155,78 @@ function sendWeeklyReportEmail() {
   });
 }
 
+function saveWeeklyReportToSheet(report) {
+  try {
+    const spreadsheet = getWeeklyReportSpreadsheet();
+    if (!spreadsheet) {
+      console.warn("週間レポート用スプレッドシートIDが未設定です");
+      return;
+    }
+
+    const sheet = getOrCreateWeeklyReportSheet(spreadsheet);
+    const stats = normalizeStats(report.stats);
+    const nextRow = sheet.getLastRow() + 1;
+    sheet.getRange(nextRow, 1, 1, WEEKLY_REPORT_HEADERS.length).setValues([[
+      report.savedAt,
+      report.weekStart,
+      report.weekEnd || getWeekEndKey(report.weekStart),
+      Number(report.completed || 0),
+      Number(report.xp || 0),
+      Number(report.gold || 0),
+      Number(stats.STR || 0),
+      Number(stats.INT || 0),
+      Number(stats.END || 0),
+      Number(stats.DEX || 0),
+      Number(report.loginStreak || 0),
+    ]]);
+    formatWeeklyReportSheet(sheet);
+  } catch (error) {
+    console.warn("週間レポートのスプレッドシート保存に失敗しました", error);
+  }
+}
+
+function getWeeklyReportSpreadsheet() {
+  if (WEEKLY_REPORT_SPREADSHEET_ID) {
+    return SpreadsheetApp.openById(WEEKLY_REPORT_SPREADSHEET_ID);
+  }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getOrCreateWeeklyReportSheet(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName("weekly_reports") || spreadsheet.insertSheet("weekly_reports");
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, WEEKLY_REPORT_HEADERS.length).setValues([WEEKLY_REPORT_HEADERS]);
+  }
+  formatWeeklyReportSheet(sheet);
+  return sheet;
+}
+
+function formatWeeklyReportSheet(sheet) {
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastColumn = WEEKLY_REPORT_HEADERS.length;
+  const headerRange = sheet.getRange(1, 1, 1, lastColumn);
+  const tableRange = sheet.getRange(1, 1, lastRow, lastColumn);
+
+  headerRange
+    .setBackground("#5b3a1f")
+    .setFontColor("#ffffff")
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle");
+
+  sheet.setFrozenRows(1);
+  tableRange.setBorder(true, true, true, true, true, true, "#d3ad5c", SpreadsheetApp.BorderStyle.SOLID);
+
+  if (lastRow > 1) {
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, lastColumn);
+    dataRange.setVerticalAlignment("middle");
+    sheet.getRange(2, 1, lastRow - 1, 3).setNumberFormat("yyyy/mm/dd").setHorizontalAlignment("center");
+    sheet.getRange(2, 4, lastRow - 1, 8).setHorizontalAlignment("center");
+  }
+
+  sheet.autoResizeColumns(1, lastColumn);
+}
+
 function getCurrentWeekStartKey() {
   const now = new Date();
   const year = Number(Utilities.formatDate(now, "Asia/Tokyo", "yyyy"));
@@ -146,6 +236,16 @@ function getCurrentWeekStartKey() {
   const dayOfWeek = japanDate.getUTCDay() || 7;
   japanDate.setUTCDate(japanDate.getUTCDate() - dayOfWeek + 1);
   return Utilities.formatDate(japanDate, "UTC", "yyyy-MM-dd");
+}
+
+function getWeekEndKey(weekStartKey) {
+  const parts = String(weekStartKey).split("-").map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) {
+    return "";
+  }
+  const weekEnd = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+  return Utilities.formatDate(weekEnd, "UTC", "yyyy-MM-dd");
 }
 
 function setupWeeklyReportTrigger() {

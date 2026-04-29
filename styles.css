@@ -2369,12 +2369,12 @@ h3 {
   left: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: stretch;
-  gap: 7px;
+  gap: 4px;
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255, 247, 223, 0.22);
   background-color: rgba(39, 26, 22, 0.94);
   background-image:
@@ -2388,15 +2388,15 @@ h3 {
 
 .nav-item {
   display: grid;
-  grid-template-rows: 52px auto;
+  grid-template-rows: 36px auto;
   place-items: center;
   align-content: center;
   justify-items: center;
   gap: 2px;
   width: 100%;
   min-width: 0;
-  min-height: 74px;
-  padding: 5px 4px 6px;
+  min-height: 68px;
+  padding: 5px 2px 6px;
   border: 1px solid transparent;
   border-radius: 8px;
   color: rgba(255, 247, 223, 0.74);
@@ -2405,10 +2405,11 @@ h3 {
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
-  font-size: 0.69rem;
+  font-size: 0.62rem;
   font-weight: 800;
   line-height: 1.15;
   text-align: center;
+  white-space: nowrap;
   transform: scale(1);
   transition: transform 120ms ease, box-shadow 140ms ease, border-color 140ms ease, filter 140ms ease;
 }
@@ -2435,15 +2436,15 @@ h3 {
 }
 
 .nav-icon {
-  --nav-icon-scale: 1.1;
-  --nav-icon-active-scale: 1.2;
+  --nav-icon-scale: 1;
+  --nav-icon-active-scale: 1.08;
   position: relative;
   overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 34px;
+  height: 34px;
   color: var(--gold-light);
   font-size: 0.78rem;
 }
@@ -2462,32 +2463,45 @@ h3 {
 }
 
 .icon-home {
-  --nav-icon-scale: 1.22;
-  --nav-icon-active-scale: 1.32;
+  --nav-icon-scale: 1;
+  --nav-icon-active-scale: 1.08;
 }
 
 .icon-quest {
-  --nav-icon-scale: 1.22;
-  --nav-icon-active-scale: 1.32;
+  --nav-icon-scale: 1;
+  --nav-icon-active-scale: 1.08;
 }
 
-.icon-status {
-  --nav-icon-scale: 1.7;
-  --nav-icon-active-scale: 1.8;
+.icon-growth {
+  --nav-icon-scale: 1;
+  --nav-icon-active-scale: 1.08;
+}
+
+.icon-reward {
+  --nav-icon-scale: 1;
+  --nav-icon-active-scale: 1.08;
 }
 
 .icon-guild {
-  --nav-icon-scale: 1.7;
-  --nav-icon-active-scale: 1.8;
+  --nav-icon-scale: 1;
+  --nav-icon-active-scale: 1.08;
 }
 
 .nav-icon.is-image-ready .nav-icon-image {
   opacity: 1;
 }
 
+.nav-item:not(.is-active) .nav-icon-image {
+  filter:
+    brightness(0.82)
+    saturate(0.88)
+    drop-shadow(0 3px 5px rgba(23, 12, 9, 0.28));
+}
+
 .nav-item.is-active .nav-icon-image {
   filter:
-    brightness(1.12)
+    brightness(1.16)
+    saturate(1.08)
     drop-shadow(0 0 7px rgba(241, 210, 122, 0.44))
     drop-shadow(0 3px 5px rgba(23, 12, 9, 0.28));
   transform: translate(-50%, -50%) scale(var(--nav-icon-active-scale));
@@ -2582,19 +2596,19 @@ h3 {
   }
 
   .nav-item {
-    grid-template-rows: 52px auto;
-    min-height: 70px;
+    grid-template-rows: 34px auto;
+    min-height: 66px;
     gap: 1px;
     padding-top: 4px;
     padding-bottom: 5px;
     padding-right: 2px;
     padding-left: 2px;
-    font-size: 0.64rem;
+    font-size: 0.6rem;
   }
 
   .nav-icon {
-    width: 52px;
-    height: 52px;
+    width: 32px;
+    height: 32px;
   }
 
   .xp-label-row {

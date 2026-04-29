@@ -93,13 +93,6 @@
             <div class="today-quest-list" data-today-quest-list></div>
           </section>
 
-          <section class="reward-shop" aria-labelledby="reward-shop-title">
-            <div class="mini-section-heading">
-              <p class="section-kicker">Reward</p>
-              <h3 id="reward-shop-title">ご褒美交換</h3>
-            </div>
-            <div class="reward-shop-list" data-reward-shop-list></div>
-          </section>
         </section>
 
         <section class="screen" id="quests" data-screen="quests" aria-labelledby="quests-title">
@@ -239,6 +232,20 @@
           </section>
         </section>
 
+        <section class="screen" id="rewards" data-screen="rewards" aria-labelledby="rewards-title">
+          <div class="section-heading">
+            <p class="section-kicker">Reward</p>
+            <h2 id="rewards-title">ご褒美交換</h2>
+          </div>
+          <section class="reward-shop" aria-labelledby="reward-shop-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Exchange</p>
+              <h3 id="reward-shop-title">交換できるご褒美</h3>
+            </div>
+            <div class="reward-shop-list" data-reward-shop-list></div>
+          </section>
+        </section>
+
         <section class="screen" id="admin-auth" data-screen="admin-auth" aria-labelledby="admin-auth-title">
           <div class="section-heading">
             <p class="section-kicker">Parent Check</p>
@@ -370,31 +377,38 @@
       <nav class="bottom-nav" aria-label="主要画面">
         <button class="nav-item is-active" type="button" data-nav="home" aria-controls="home">
           <span class="nav-icon">
-            <img class="nav-icon-image icon-home" src="assets/icons/icon-home.png" alt="" data-nav-icon-image>
-            <span class="nav-icon-fallback">館</span>
+            <img class="nav-icon-image icon-home" src="assets/icons/nav-home.png" alt="" data-nav-icon-image>
+            <span class="nav-icon-fallback">家</span>
           </span>
-          <span>冒険者の間</span>
+          <span>ホーム</span>
         </button>
         <button class="nav-item" type="button" data-nav="quests" aria-controls="quests">
           <span class="nav-icon">
-            <img class="nav-icon-image icon-quest" src="assets/icons/icon-quest.png" alt="" data-nav-icon-image>
+            <img class="nav-icon-image icon-quest" src="assets/icons/nav-quest.png" alt="" data-nav-icon-image>
             <span class="nav-icon-fallback">書</span>
           </span>
           <span>クエスト</span>
         </button>
         <button class="nav-item" type="button" data-nav="growth" aria-controls="growth">
           <span class="nav-icon">
-            <img class="nav-icon-image icon-status" src="assets/icons/icon-status.png" alt="" data-nav-icon-image>
+            <img class="nav-icon-image icon-growth" src="assets/icons/nav-growth.png" alt="" data-nav-icon-image>
             <span class="nav-icon-fallback">星</span>
           </span>
-          <span>成長記録</span>
+          <span>成長</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="rewards" aria-controls="rewards">
+          <span class="nav-icon">
+            <img class="nav-icon-image icon-reward" src="assets/icons/nav-reward.png" alt="" data-nav-icon-image>
+            <span class="nav-icon-fallback">宝</span>
+          </span>
+          <span>ご褒美</span>
         </button>
         <button class="nav-item" type="button" data-nav="admin" aria-controls="admin">
           <span class="nav-icon">
-            <img class="nav-icon-image icon-guild" src="assets/icons/icon-guild.png" alt="" data-nav-icon-image>
+            <img class="nav-icon-image icon-guild" src="assets/icons/nav-guild.png" alt="" data-nav-icon-image>
             <span class="nav-icon-fallback">鍵</span>
           </span>
-          <span>ギルド管理</span>
+          <span>ギルド</span>
         </button>
       </nav>
     </div>

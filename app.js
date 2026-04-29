@@ -196,6 +196,7 @@ let clearToastTimer;
 let levelUpTimer;
 let evolutionTimer;
 let xpChangeTimer;
+let questCompleteTimer;
 let pendingXpAnimationStart = null;
 let currentCharacterSrc = "";
 let currentTitleName = "";
@@ -895,6 +896,7 @@ function completeQuest(questId, sourceElement) {
 
   saveProgress();
   render();
+  playQuestCompleteAnimation(quest.id);
   queueXpChangeAnimation(getLevel(progress.xp) > previousLevel ? 0 : previousLevelProgress);
   showRewardFeedback(quest);
   showFloatingReward(quest, sourceRect);
@@ -1567,6 +1569,7 @@ function renderQuests() {
     const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
     const card = document.createElement("article");
     card.className = `quest-card quest-card-${quest.type}${completed ? " is-completed" : ""}`;
+    card.dataset.questCard = quest.id;
 
     card.innerHTML = `
       <div class="quest-title-row">
@@ -1592,6 +1595,22 @@ function renderQuests() {
   });
 }
 
+function playQuestCompleteAnimation(questId) {
+  const card = [...document.querySelectorAll("[data-quest-card]")].find((item) => item.dataset.questCard === questId);
+  if (!card) {
+    return;
+  }
+
+  card.classList.remove("is-quest-complete-flash");
+  void card.offsetWidth;
+  card.classList.add("is-quest-complete-flash");
+
+  window.clearTimeout(questCompleteTimer);
+  questCompleteTimer = window.setTimeout(() => {
+    card.classList.remove("is-quest-complete-flash");
+  }, 1400);
+}
+
 function renderTodayQuests() {
   const list = document.querySelector("[data-today-quest-list]");
   if (!list) {
@@ -1599,8 +1618,44 @@ function renderTodayQuests() {
   }
 
   list.innerHTML = "";
+  const todayQuests = getVisibleQuests();
+  const completedCount = todayQuests.filter(isQuestCompleted).length;
+  const totalCount = todayQuests.length;
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const progressCard = document.querySelector("[data-today-progress]");
+  const progressCount = document.querySelector("[data-today-progress-count]");
+  const progressBar = document.querySelector("[data-today-progress-bar]");
+  const progressMessage = document.querySelector("[data-today-progress-message]");
 
-  getVisibleQuests().slice(0, 3).forEach((quest) => {
+  if (progressCount) {
+    progressCount.textContent = `${completedCount} / ${totalCount}`;
+  }
+  if (progressBar) {
+    progressBar.style.width = `${progressPercent}%`;
+  }
+  if (progressMessage) {
+    if (totalCount === 0) {
+      progressMessage.textContent = "今日はクエストがありません。ゆっくり整えましょう。";
+    } else if (completedCount === totalCount) {
+      progressMessage.textContent = "今日のクエストをすべて達成しました！";
+    } else {
+      progressMessage.textContent = `あと${totalCount - completedCount}件で今日の依頼は完了です。`;
+    }
+  }
+  if (progressCard) {
+    progressCard.classList.toggle("is-complete", totalCount > 0 && completedCount === totalCount);
+    progressCard.classList.toggle("is-empty", totalCount === 0);
+  }
+
+  if (totalCount === 0) {
+    const empty = document.createElement("p");
+    empty.className = "today-quest-empty";
+    empty.textContent = "今日はクエストがありません";
+    list.append(empty);
+    return;
+  }
+
+  todayQuests.slice(0, 3).forEach((quest) => {
     const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
     const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
@@ -1782,7 +1837,7 @@ function showRewardFeedback(quest) {
     return;
   }
 
-  toast.textContent = `+${quest.xpReward} XP / +${quest.goldReward} G / ${getStatLabel(quest.stat)} +1`;
+  toast.textContent = `クエスト達成！ XP +${quest.xpReward} / Gold +${quest.goldReward}`;
   toast.classList.remove("is-visible");
   void toast.offsetWidth;
   toast.classList.add("is-visible");

@@ -1559,27 +1559,49 @@ h3 {
 .growth-summary-grid article,
 .title-history-list article {
   display: grid;
-  gap: 5px;
+  align-content: center;
+  gap: 8px;
   min-width: 0;
+  min-height: 96px;
   border: 1px solid rgba(201, 154, 53, 0.24);
   border-radius: 8px;
-  padding: 10px 8px;
+  padding: 14px 8px 16px;
   text-align: center;
   background: rgba(255, 247, 223, 0.5);
 }
 
 .growth-summary-grid span,
 .title-history-list span {
-  color: var(--muted);
-  font-size: 0.72rem;
+  color: rgba(111, 77, 59, 0.74);
+  font-size: 0.68rem;
   font-weight: 800;
 }
 
 .growth-summary-grid strong {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
   color: var(--navy);
-  font-size: clamp(1.15rem, 5vw, 1.55rem);
+  font-size: clamp(2.05rem, 10vw, 3rem);
   font-weight: 900;
-  line-height: 1.05;
+  line-height: 0.92;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(255, 247, 223, 0.72);
+}
+
+.growth-summary-grid strong > span:not(.growth-unit) {
+  color: inherit;
+  font-size: 1em;
+  font-weight: inherit;
+}
+
+.growth-summary-grid .growth-unit {
+  color: var(--navy);
+  font-size: 0.36em;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .growth-goal {

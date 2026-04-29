@@ -6,11 +6,18 @@ const REWARD_HISTORY_KEY = "sora_guild_app_reward_history_dev";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 const isTestMode = false;
 const PARENT_PIN = "1234";
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 const defaultProgress = {
   name: "そら",
   xp: 0,
   gold: 0,
+  stats: {
+    STR: 0,
+    INT: 0,
+    END: 0,
+    DEX: 0,
+  },
   completedQuestIds: [],
   streak: {
     current: 0,
@@ -28,6 +35,7 @@ const defaultQuests = [
     title: "宿題を終える",
     description: "今日の宿題を最後まで片づける。",
     frequency: "daily",
+    stat: "INT",
     xpReward: 40,
     goldReward: 30,
   },
@@ -37,6 +45,7 @@ const defaultQuests = [
     title: "音読をする",
     description: "声に出して読み、聞いてもらう。",
     frequency: "daily",
+    stat: "INT",
     xpReward: 30,
     goldReward: 20,
   },
@@ -46,6 +55,7 @@ const defaultQuests = [
     title: "お手伝いをする",
     description: "家の中で一つ、誰かの助けになる。",
     frequency: "daily",
+    stat: "END",
     xpReward: 35,
     goldReward: 25,
   },
@@ -209,6 +219,7 @@ function loadProgress() {
       completedQuestIds: Array.isArray(parsed.completedQuestIds) ? parsed.completedQuestIds : [],
       xp: Number.isFinite(parsed.xp) ? parsed.xp : defaultProgress.xp,
       gold: Number.isFinite(parsed.gold) ? parsed.gold : defaultProgress.gold,
+      stats: normalizeStats(parsed.stats),
       streak: normalizeStreak(parsed.streak),
       activityLog: Array.isArray(parsed.activityLog) ? parsed.activityLog.map(normalizeActivityLogItem).filter(Boolean) : [],
       titleHistory: Array.isArray(parsed.titleHistory) ? parsed.titleHistory.map(normalizeTitleHistoryItem).filter(Boolean) : [],
@@ -216,6 +227,15 @@ function loadProgress() {
   } catch {
     return { ...defaultProgress };
   }
+}
+
+function normalizeStats(rawStats = {}) {
+  return {
+    STR: Number.isFinite(rawStats.STR) ? Math.max(0, Math.round(rawStats.STR)) : 0,
+    INT: Number.isFinite(rawStats.INT) ? Math.max(0, Math.round(rawStats.INT)) : 0,
+    END: Number.isFinite(rawStats.END) ? Math.max(0, Math.round(rawStats.END)) : 0,
+    DEX: Number.isFinite(rawStats.DEX) ? Math.max(0, Math.round(rawStats.DEX)) : 0,
+  };
 }
 
 function saveProgress() {
@@ -254,6 +274,11 @@ function getWeekKey(date = new Date()) {
   const weekMonth = String(japanDate.getUTCMonth() + 1).padStart(2, "0");
   const weekDay = String(japanDate.getUTCDate()).padStart(2, "0");
   return `${weekYear}-${weekMonth}-${weekDay}`;
+}
+
+function getJapanDayOfWeek(date = new Date()) {
+  const { year, month, day } = getJapanDateParts(date);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 }
 
 function getDayDifference(fromDateKey, toDateKey) {
@@ -354,12 +379,43 @@ function normalizeTitleHistoryItem(rawItem) {
   };
 }
 
+function inferQuestStat(rawQuest) {
+  const text = `${rawQuest.title || ""} ${rawQuest.description || ""}`;
+
+  if (/宿題|勉強|学習|読書|音読|計算|漢字|テスト|プリント/.test(text)) {
+    return "INT";
+  }
+  if (/掃除|片づけ|片付け|お手伝い|手伝い|洗濯|皿|食器|準備/.test(text)) {
+    return "END";
+  }
+  if (/運動|体操|走|筋トレ|スポーツ|散歩|なわとび/.test(text)) {
+    return "STR";
+  }
+  if (/工作|制作|作る|折り紙|絵|描|ぬりえ|料理|手芸/.test(text)) {
+    return "DEX";
+  }
+
+  return "END";
+}
+
+function normalizeScheduleDays(rawDays) {
+  if (!Array.isArray(rawDays)) {
+    return [];
+  }
+
+  return [...new Set(rawDays.map(Number))]
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    .sort((a, b) => a - b);
+}
+
 function normalizeQuest(rawQuest) {
   const xpReward = Number(rawQuest.xpReward);
   const goldReward = Number(rawQuest.goldReward);
   const title = String(rawQuest.title || "").trim();
   const type = ["normal", "urgent", "boss"].includes(rawQuest.type) ? rawQuest.type : "normal";
-  const frequency = ["once", "daily", "weekly"].includes(rawQuest.frequency) ? rawQuest.frequency : "daily";
+  const frequency = ["once", "daily", "weekly", "weekday"].includes(rawQuest.frequency) ? rawQuest.frequency : "daily";
+  const stat = ["STR", "INT", "END", "DEX"].includes(rawQuest.stat) ? rawQuest.stat : inferQuestStat(rawQuest);
+  const scheduleDays = normalizeScheduleDays(rawQuest.scheduleDays);
 
   if (!title || !Number.isFinite(xpReward) || !Number.isFinite(goldReward)) {
     return null;
@@ -370,6 +426,8 @@ function normalizeQuest(rawQuest) {
     title,
     type,
     frequency,
+    scheduleDays,
+    stat,
     description: String(rawQuest.description || "").trim(),
     xpReward: Math.max(0, Math.round(xpReward)),
     goldReward: Math.max(0, Math.round(goldReward)),
@@ -545,6 +603,9 @@ function getQuestCompletionKey(quest) {
   if (quest.frequency === "weekly") {
     return `${quest.id}:weekly:${getWeekKey()}`;
   }
+  if (quest.frequency === "weekday") {
+    return `${quest.id}:weekday:${getDateKey()}`;
+  }
   return quest.id;
 }
 
@@ -553,7 +614,13 @@ function isQuestCompleted(quest) {
 }
 
 function isQuestVisible(quest) {
-  return quest.frequency !== "once" || !isQuestCompleted(quest);
+  if (quest.frequency === "once") {
+    return !isQuestCompleted(quest);
+  }
+  if (quest.frequency === "weekday") {
+    return normalizeScheduleDays(quest.scheduleDays).includes(getJapanDayOfWeek());
+  }
+  return true;
 }
 
 function getVisibleQuests() {
@@ -570,14 +637,111 @@ function getQuestTypeLabel(type) {
   return "";
 }
 
-function getQuestFrequencyLabel(frequency) {
+function getScheduleDaysLabel(scheduleDays) {
+  const days = normalizeScheduleDays(scheduleDays);
+  if (days.length === 0) {
+    return "曜日指定";
+  }
+  return days.map((day) => WEEKDAY_LABELS[day]).join("・");
+}
+
+function getQuestFrequencyLabel(frequency, scheduleDays = []) {
   if (frequency === "once") {
     return "単発";
   }
   if (frequency === "weekly") {
     return "毎週";
   }
+  if (frequency === "weekday") {
+    return getScheduleDaysLabel(scheduleDays);
+  }
   return "毎日";
+}
+
+function getStatLabel(stat) {
+  const labels = {
+    STR: "力",
+    INT: "賢さ",
+    END: "忍耐力",
+    DEX: "器用さ",
+  };
+  return labels[stat] || labels.END;
+}
+
+function getSubTitle(stats) {
+  const normalizedStats = normalizeStats(stats);
+  const entries = Object.entries(normalizedStats);
+  const maxValue = Math.max(...entries.map(([, value]) => value));
+  const strongestStats = entries.filter(([, value]) => value === maxValue).map(([stat]) => stat);
+
+  if (strongestStats.length !== 1) {
+    return {
+      name: "バランスの冒険者",
+      strongestStat: "",
+    };
+  }
+
+  const titles = {
+    STR: "力の冒険者",
+    INT: "学びの冒険者",
+    END: "継続の冒険者",
+    DEX: "器用な冒険者",
+  };
+
+  return {
+    name: titles[strongestStats[0]],
+    strongestStat: strongestStats[0],
+  };
+}
+
+function getPrimaryStat(stats) {
+  const normalizedStats = normalizeStats(stats);
+  const entries = Object.entries(normalizedStats);
+  const maxValue = Math.max(...entries.map(([, value]) => value));
+  const strongestStats = entries.filter(([, value]) => value === maxValue).map(([stat]) => stat);
+
+  return strongestStats.length === 1 ? strongestStats[0] : "BALANCED";
+}
+
+function getCharacterClass(stats) {
+  const classByStat = {
+    STR: "warrior",
+    INT: "sage",
+    END: "guardian",
+    DEX: "ranger",
+    BALANCED: "hero",
+  };
+
+  return classByStat[getPrimaryStat(stats)] || classByStat.BALANCED;
+}
+
+function getCharacterTypeLabel(stats) {
+  const labels = {
+    warrior: "戦士タイプ",
+    sage: "賢者タイプ",
+    guardian: "守護者タイプ",
+    ranger: "レンジャータイプ",
+    hero: "勇者タイプ",
+  };
+
+  return labels[getCharacterClass(stats)] || labels.hero;
+}
+
+function getCharacterStageName(level) {
+  if (level >= 61) {
+    return "stage-4";
+  }
+  if (level >= 31) {
+    return "stage-3";
+  }
+  if (level >= 11) {
+    return "stage-2";
+  }
+  return "stage-1";
+}
+
+function getCharacterImagePath(level, stats) {
+  return `assets/characters/${getCharacterClass(stats)}/${getCharacterStageName(level)}.png`;
 }
 
 function escapeHtml(value) {
@@ -674,7 +838,7 @@ function isEvolutionLevel(level) {
 }
 
 function getCharacterImageCandidatesForLevel(level) {
-  const candidates = [];
+  const candidates = [getCharacterImagePath(level, progress.stats)];
 
   for (let index = characterStages.length - 1; index >= 0; index -= 1) {
     if (level >= characterStages[index].minLevel) {
@@ -698,11 +862,16 @@ function completeQuest(questId, sourceElement) {
   const completedAtIso = completedAt.toISOString();
   const nextXp = progress.xp + quest.xpReward;
   const nextLevel = getLevel(nextXp);
+  const currentStats = normalizeStats(progress.stats);
 
   progress = {
     ...progress,
     xp: nextXp,
     gold: progress.gold + quest.goldReward,
+    stats: {
+      ...currentStats,
+      [quest.stat]: currentStats[quest.stat] + 1,
+    },
     completedQuestIds: [...progress.completedQuestIds, getQuestCompletionKey(quest)],
     streak: updateStreakOnQuestComplete(progress.streak),
     activityLog: [
@@ -879,6 +1048,8 @@ function handleQuestCreateSubmit(event) {
     id: `parent-${Date.now()}`,
     type: formData.get("type"),
     frequency: formData.get("frequency"),
+    scheduleDays: formData.getAll("scheduleDays"),
+    stat: formData.get("stat"),
     title: formData.get("title"),
     description: formData.get("description"),
     xpReward: formData.get("xp"),
@@ -888,6 +1059,13 @@ function handleQuestCreateSubmit(event) {
   if (!quest || quest.xpReward <= 0 || quest.goldReward <= 0) {
     if (message) {
       message.textContent = "クエスト名、XP、Goldを入力してください";
+    }
+    return;
+  }
+
+  if (quest.frequency === "weekday" && quest.scheduleDays.length === 0) {
+    if (message) {
+      message.textContent = "曜日を1つ以上選んでください";
     }
     return;
   }
@@ -903,6 +1081,35 @@ function handleQuestCreateSubmit(event) {
   render();
 }
 
+function renderWeekdayPicker(selectedDays = [], hidden = true) {
+  const normalizedDays = normalizeScheduleDays(selectedDays);
+  return `
+    <fieldset class="weekday-picker" data-weekday-picker${hidden ? " hidden" : ""}>
+      <legend>表示する曜日</legend>
+      <div class="weekday-options">
+        ${WEEKDAY_LABELS.map(
+          (label, day) => `
+            <label>
+              <input type="checkbox" name="scheduleDays" value="${day}"${normalizedDays.includes(day) ? " checked" : ""}>
+              <span>${label}</span>
+            </label>
+          `,
+        ).join("")}
+      </div>
+    </fieldset>
+  `;
+}
+
+function updateWeekdayPicker(form) {
+  const picker = form?.querySelector("[data-weekday-picker]");
+  const frequency = form?.querySelector('[name="frequency"]')?.value;
+  if (!picker) {
+    return;
+  }
+
+  picker.hidden = frequency !== "weekday";
+}
+
 function renderQuestCreateForm() {
   const form = document.querySelector("[data-quest-create-form]");
   const toggleButton = document.querySelector("[data-toggle-quest-create]");
@@ -913,6 +1120,7 @@ function renderQuestCreateForm() {
   if (!isTestMode) {
     toggleButton?.remove();
     form.hidden = false;
+    updateWeekdayPicker(form);
     return;
   }
 
@@ -924,6 +1132,7 @@ function renderQuestCreateForm() {
   form.hidden = !isQuestCreateOpen;
   toggleButton.setAttribute("aria-expanded", String(isQuestCreateOpen));
   toggleButton.textContent = isQuestCreateOpen ? "追加フォームを閉じる" : "新しいクエスト追加";
+  updateWeekdayPicker(form);
 }
 
 function renderQuestManager() {
@@ -963,7 +1172,18 @@ function renderQuestManager() {
             <select name="frequency">
               <option value="daily"${quest.frequency === "daily" ? " selected" : ""}>毎日</option>
               <option value="weekly"${quest.frequency === "weekly" ? " selected" : ""}>毎週</option>
+              <option value="weekday"${quest.frequency === "weekday" ? " selected" : ""}>曜日指定</option>
               <option value="once"${quest.frequency === "once" ? " selected" : ""}>単発</option>
+            </select>
+          </label>
+          ${renderWeekdayPicker(quest.scheduleDays, quest.frequency !== "weekday")}
+          <label>
+            成長する能力
+            <select name="stat">
+              <option value="STR"${quest.stat === "STR" ? " selected" : ""}>力</option>
+              <option value="INT"${quest.stat === "INT" ? " selected" : ""}>賢さ</option>
+              <option value="END"${quest.stat === "END" ? " selected" : ""}>忍耐力</option>
+              <option value="DEX"${quest.stat === "DEX" ? " selected" : ""}>器用さ</option>
             </select>
           </label>
           <label>
@@ -998,13 +1218,14 @@ function renderQuestManager() {
             <h4>${escapeHtml(quest.title)}</h4>
             <div class="quest-title-badges">
               ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
-              <span class="quest-frequency-badge">${getQuestFrequencyLabel(quest.frequency)}</span>
+              <span class="quest-frequency-badge">${getQuestFrequencyLabel(quest.frequency, quest.scheduleDays)}</span>
             </div>
           </div>
           <p>${escapeHtml(quest.description)}</p>
           <div class="reward-row">
             <span class="reward-badge">XP +${quest.xpReward}</span>
             <span class="reward-badge">Gold +${quest.goldReward}</span>
+            <span class="stat-reward-badge stat-${quest.stat}">${getStatLabel(quest.stat)} +1</span>
           </div>
         </div>
         <div class="managed-quest-actions">
@@ -1036,6 +1257,8 @@ function handleQuestEditSubmit(event) {
     id: questId,
     type: formData.get("type"),
     frequency: formData.get("frequency"),
+    scheduleDays: formData.getAll("scheduleDays"),
+    stat: formData.get("stat"),
     title: formData.get("title"),
     description: formData.get("description"),
     xpReward: formData.get("xp"),
@@ -1046,6 +1269,13 @@ function handleQuestEditSubmit(event) {
   if (!quest || quest.xpReward <= 0 || quest.goldReward <= 0) {
     if (message) {
       message.textContent = "クエスト名、XP、Goldを入力してください";
+    }
+    return;
+  }
+
+  if (quest.frequency === "weekday" && quest.scheduleDays.length === 0) {
+    if (message) {
+      message.textContent = "曜日を1つ以上選んでください";
     }
     return;
   }
@@ -1334,7 +1564,7 @@ function renderQuests() {
   getVisibleQuests().forEach((quest) => {
     const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
-    const frequencyLabel = getQuestFrequencyLabel(quest.frequency);
+    const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
     const card = document.createElement("article");
     card.className = `quest-card quest-card-${quest.type}${completed ? " is-completed" : ""}`;
 
@@ -1351,6 +1581,7 @@ function renderQuests() {
       <div class="reward-row">
         <span class="reward-badge">XP +${quest.xpReward}</span>
         <span class="reward-badge">Gold +${quest.goldReward}</span>
+        <span class="stat-reward-badge stat-${quest.stat}">${getStatLabel(quest.stat)} +1</span>
       </div>
       <button class="complete-button" type="button" data-complete="${quest.id}" ${completed ? "disabled" : ""}>
         ${completed ? "達成済み" : "完了"}
@@ -1372,7 +1603,7 @@ function renderTodayQuests() {
   getVisibleQuests().slice(0, 3).forEach((quest) => {
     const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
-    const frequencyLabel = getQuestFrequencyLabel(quest.frequency);
+    const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
     const item = document.createElement("article");
     item.className = `today-quest-item today-quest-${quest.type}${completed ? " is-completed" : ""}`;
 
@@ -1551,7 +1782,7 @@ function showRewardFeedback(quest) {
     return;
   }
 
-  toast.textContent = `+${quest.xpReward} XP / +${quest.goldReward} G`;
+  toast.textContent = `+${quest.xpReward} XP / +${quest.goldReward} G / ${getStatLabel(quest.stat)} +1`;
   toast.classList.remove("is-visible");
   void toast.offsetWidth;
   toast.classList.add("is-visible");
@@ -1618,6 +1849,7 @@ function renderGrowthRecord(level, title) {
   const todayGrowth = getTodayGrowth();
   const xpToNext = getXpToNextLevel(progress.xp);
   const estimatedCount = getEstimatedQuestCountToLevel(progress.xp);
+  const subTitle = getSubTitle(progress.stats);
 
   setText("[data-today-completed]", todayGrowth.completed);
   setText("[data-today-xp]", todayGrowth.xp);
@@ -1628,6 +1860,7 @@ function renderGrowthRecord(level, title) {
   setText("[data-goal-count]", `あと${estimatedCount}回くらいでレベルアップ`);
   setText("[data-current-title-record]", title.name);
   setText("[data-previous-title-record]", getPreviousTitleForRecord(level));
+  setText("[data-record-sub-title]", subTitle.name);
   renderActivityLog();
 }
 
@@ -1667,6 +1900,8 @@ function render() {
   applyDailyStreakReset();
   const level = getLevel(progress.xp);
   const title = getTitle(level);
+  progress.stats = normalizeStats(progress.stats);
+  const subTitle = getSubTitle(progress.stats);
   const titleNameElement = document.querySelector("[data-title-name]");
   const titleDescElement = document.querySelector("[data-title-desc]");
   const titleChanged = currentTitleName !== "" && currentTitleName !== title.name;
@@ -1677,6 +1912,8 @@ function render() {
   if (titleDescElement) {
     titleDescElement.textContent = title.desc;
   }
+  setText("[data-sub-title-name]", subTitle.name);
+  setText("[data-character-type]", getCharacterTypeLabel(progress.stats));
   if (titleChanged && titleNameElement) {
     const titleBlock = titleNameElement.closest(".adventurer-copy");
     titleBlock?.classList.remove("is-title-changing");
@@ -1694,6 +1931,13 @@ function render() {
   setText("[data-record-xp]", progress.xp);
   setText("[data-record-gold]", progress.gold);
   setText("[data-record-completed]", progress.completedQuestIds.length);
+  setText("[data-stat-str]", progress.stats.STR);
+  setText("[data-stat-int]", progress.stats.INT);
+  setText("[data-stat-end]", progress.stats.END);
+  setText("[data-stat-dex]", progress.stats.DEX);
+  document.querySelectorAll("[data-stat-card]").forEach((card) => {
+    card.classList.toggle("is-strongest", card.dataset.statCard === subTitle.strongestStat);
+  });
 
   renderGrowthRecord(level, title);
   renderXpBar();
@@ -1858,6 +2102,12 @@ document.addEventListener("click", (event) => {
   const deleteRewardButton = event.target.closest("[data-delete-reward]");
   if (deleteRewardButton) {
     deleteReward(deleteRewardButton.dataset.deleteReward);
+  }
+});
+
+document.addEventListener("change", (event) => {
+  if (event.target.matches('[name="frequency"]')) {
+    updateWeekdayPicker(event.target.closest("form"));
   }
 });
 

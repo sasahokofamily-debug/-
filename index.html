@@ -32,6 +32,8 @@
             <div class="adventurer-copy">
               <p class="section-kicker">称号</p>
               <h2 id="home-title" data-title-name>一歩目の見習い</h2>
+              <p class="sub-title-line">サブ称号：<strong data-sub-title-name>バランスの冒険者</strong></p>
+              <p class="character-type-line">現在タイプ：<strong data-character-type>勇者タイプ</strong></p>
               <p class="daily-word" data-title-desc>はじめての挑戦をした</p>
             </div>
           </div>
@@ -121,6 +123,36 @@
               <strong><span data-record-completed>0</span><span class="record-unit">件</span></strong>
             </article>
           </div>
+
+          <section class="growth-panel" aria-labelledby="stats-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Status</p>
+              <h3 id="stats-title">能力値</h3>
+            </div>
+            <div class="ability-grid">
+              <article class="ability-card ability-str" data-stat-card="STR">
+                <span>STR</span>
+                <strong data-stat-str>0</strong>
+                <small><strong>力</strong><em>体を動かす力</em></small>
+              </article>
+              <article class="ability-card ability-int" data-stat-card="INT">
+                <span>INT</span>
+                <strong data-stat-int>0</strong>
+                <small><strong>賢さ</strong><em>考える力</em></small>
+              </article>
+              <article class="ability-card ability-end" data-stat-card="END">
+                <span>END</span>
+                <strong data-stat-end>0</strong>
+                <small><strong>忍耐力</strong><em>続ける力</em></small>
+              </article>
+              <article class="ability-card ability-dex" data-stat-card="DEX">
+                <span>DEX</span>
+                <strong data-stat-dex>0</strong>
+                <small><strong>器用さ</strong><em>工夫する力</em></small>
+              </article>
+            </div>
+            <p class="ability-sub-title">現在のサブ称号：<strong data-record-sub-title>バランスの冒険者</strong></p>
+          </section>
 
           <section class="growth-panel" aria-labelledby="today-growth-title">
             <div class="mini-section-heading">
@@ -246,7 +278,29 @@
               <select name="frequency">
                 <option value="daily">毎日</option>
                 <option value="weekly">毎週</option>
+                <option value="weekday">曜日指定</option>
                 <option value="once">単発</option>
+              </select>
+            </label>
+            <fieldset class="weekday-picker" data-weekday-picker hidden>
+              <legend>表示する曜日</legend>
+              <div class="weekday-options">
+                <label><input type="checkbox" name="scheduleDays" value="0"><span>日</span></label>
+                <label><input type="checkbox" name="scheduleDays" value="1"><span>月</span></label>
+                <label><input type="checkbox" name="scheduleDays" value="2"><span>火</span></label>
+                <label><input type="checkbox" name="scheduleDays" value="3"><span>水</span></label>
+                <label><input type="checkbox" name="scheduleDays" value="4"><span>木</span></label>
+                <label><input type="checkbox" name="scheduleDays" value="5"><span>金</span></label>
+                <label><input type="checkbox" name="scheduleDays" value="6"><span>土</span></label>
+              </div>
+            </fieldset>
+            <label>
+              成長する能力
+              <select name="stat">
+                <option value="STR">力</option>
+                <option value="INT">賢さ</option>
+                <option value="END">忍耐力</option>
+                <option value="DEX">器用さ</option>
               </select>
             </label>
             <label>

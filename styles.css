@@ -475,6 +475,25 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.sub-title-line,
+.character-type-line {
+  margin: 8px 0 0;
+  color: rgba(111, 77, 59, 0.82);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.character-type-line {
+  margin-top: 5px;
+}
+
+.sub-title-line strong,
+.character-type-line strong {
+  color: var(--navy);
+  font-weight: 950;
+}
+
 .adventurer-copy.is-title-changing {
   animation: titleBlockGlow 720ms ease both;
 }
@@ -1309,6 +1328,7 @@ h3 {
 }
 
 .reward-badge,
+.stat-reward-badge,
 .status-badge,
 .quest-type-badge,
 .quest-frequency-badge {
@@ -1324,6 +1344,27 @@ h3 {
 .reward-badge {
   color: var(--wood-dark);
   background: rgba(201, 154, 53, 0.22);
+}
+
+.stat-reward-badge {
+  color: var(--cream);
+}
+
+.stat-STR {
+  background: linear-gradient(180deg, #c34a3e, #8f2f2a);
+}
+
+.stat-INT {
+  background: linear-gradient(180deg, #426a9d, #163251);
+}
+
+.stat-END {
+  background: linear-gradient(180deg, #5f8a57, #365f3a);
+}
+
+.stat-DEX {
+  color: var(--wood-dark);
+  background: linear-gradient(180deg, #ead17f, #c99a35);
 }
 
 .status-badge {
@@ -1604,6 +1645,112 @@ h3 {
   line-height: 1;
 }
 
+.ability-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ability-card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 104px;
+  border: 1px solid rgba(201, 154, 53, 0.26);
+  border-radius: 8px;
+  padding: 12px 6px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(255, 247, 223, 0.72), rgba(244, 230, 198, 0.58)),
+    rgba(255, 247, 223, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(255, 247, 223, 0.28);
+}
+
+.ability-card.is-strongest {
+  border-color: rgba(201, 154, 53, 0.72);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(241, 210, 122, 0.34), transparent 5rem),
+    linear-gradient(180deg, rgba(255, 247, 223, 0.86), rgba(244, 230, 198, 0.66));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 247, 223, 0.46),
+    0 0 18px rgba(201, 154, 53, 0.2);
+}
+
+.ability-card span {
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--cream);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ability-card > strong {
+  color: var(--navy);
+  font-size: clamp(2rem, 9vw, 2.75rem);
+  font-weight: 900;
+  line-height: 0.95;
+  text-shadow: 0 1px 0 rgba(255, 247, 223, 0.72);
+}
+
+.ability-card small {
+  display: grid;
+  gap: 3px;
+  color: rgba(111, 77, 59, 0.78);
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1.18;
+}
+
+.ability-card small strong {
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.ability-card small em {
+  color: rgba(111, 77, 59, 0.72);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.ability-str span {
+  background: linear-gradient(180deg, #c34a3e, #8f2f2a);
+}
+
+.ability-int span {
+  background: linear-gradient(180deg, #426a9d, #163251);
+}
+
+.ability-end span {
+  background: linear-gradient(180deg, #5f8a57, #365f3a);
+}
+
+.ability-dex span {
+  color: var(--wood-dark);
+  background: linear-gradient(180deg, #ead17f, #c99a35);
+}
+
+.ability-sub-title {
+  margin: 12px 0 0;
+  border: 1px solid rgba(201, 154, 53, 0.24);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: rgba(111, 77, 59, 0.82);
+  background: rgba(255, 247, 223, 0.5);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ability-sub-title strong {
+  color: var(--navy);
+  font-weight: 950;
+}
+
 .growth-goal {
   display: grid;
   gap: 6px;
@@ -1832,6 +1979,60 @@ h3 {
   min-height: 82px;
   resize: vertical;
   line-height: 1.55;
+}
+
+.weekday-picker {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid rgba(201, 154, 53, 0.28);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--muted);
+  background: rgba(255, 247, 223, 0.36);
+}
+
+.weekday-picker[hidden] {
+  display: none;
+}
+
+.weekday-picker legend {
+  padding: 0 4px;
+  color: var(--wood-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.weekday-options {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.weekday-options label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid rgba(111, 63, 38, 0.18);
+  border-radius: 8px;
+  padding: 6px 3px;
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255, 247, 223, 0.72), rgba(244, 230, 198, 0.48)),
+    rgba(255, 247, 223, 0.5);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.weekday-options input {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--gold);
 }
 
 .reward-input-grid {

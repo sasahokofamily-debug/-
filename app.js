@@ -235,11 +235,24 @@ let editingQuestId = null;
 let editingRewardId = null;
 let isQuestCreateOpen = false;
 
+function getDefaultProgressState() {
+  return {
+    ...defaultProgress,
+    stats: { ...defaultProgress.stats },
+    completedQuestIds: [],
+    streak: { ...defaultProgress.streak },
+    activityLog: [],
+    titleHistory: [],
+    questCompletedWeekdays: [],
+    visitedScreens: [],
+  };
+}
+
 function loadProgress() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      return { ...defaultProgress };
+      return getDefaultProgressState();
     }
 
     const parsed = JSON.parse(stored);
@@ -269,7 +282,7 @@ function loadProgress() {
       visitedScreens: normalizeStringList(parsed.visitedScreens),
     };
   } catch {
-    return { ...defaultProgress };
+    return getDefaultProgressState();
   }
 }
 
@@ -471,6 +484,7 @@ function normalizeActivityLogItem(rawItem) {
   const xpReward = Number(rawItem.xpReward);
   const goldReward = Number(rawItem.goldReward);
   const completedAt = typeof rawItem.completedAt === "string" ? rawItem.completedAt : new Date().toISOString();
+  const stat = ["STR", "INT", "END", "DEX"].includes(rawItem.stat) ? rawItem.stat : inferQuestStat({ title: questTitle });
 
   if (!questTitle || !Number.isFinite(xpReward) || !Number.isFinite(goldReward)) {
     return null;
@@ -484,6 +498,7 @@ function normalizeActivityLogItem(rawItem) {
     completedAt,
     dateKey: typeof rawItem.dateKey === "string" ? rawItem.dateKey : getDateKey(new Date(completedAt)),
     completedHour: Number.isFinite(rawItem.completedHour) ? Math.max(0, Math.min(23, Math.round(rawItem.completedHour))) : getJapanHour(new Date(completedAt)),
+    stat,
   };
 }
 
@@ -717,6 +732,38 @@ function notifyRewardExchange(historyItem) {
       console.warn("ご褒美交換通知に失敗しました", error);
       return false;
     });
+}
+
+function notifyWeeklyReport() {
+  if (!NOTIFY_URL) {
+    return Promise.resolve(true);
+  }
+
+  const report = getWeeklyReport();
+  const data = {
+    type: "weeklyReport",
+    name: progress.name || "そら",
+    completed: report.completed,
+    xp: report.xp,
+    gold: report.gold,
+    stats: report.stats,
+    statGrowth: formatWeeklyStatGrowth(report.stats),
+    loginStreak: progress.loginStreak || 0,
+    weekStart: getWeekKey(),
+    sentAt: new Date().toISOString(),
+  };
+
+  return fetch(NOTIFY_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify(data),
+  }).catch((error) => {
+    console.warn("週間レポート送信に失敗しました", error);
+    return false;
+  });
 }
 
 function getAllQuests() {
@@ -955,6 +1002,52 @@ function getTodayGrowth() {
       }),
       { completed: 0, xp: 0, gold: 0 },
     );
+}
+
+function getWeeklyReport() {
+  const weekStart = getWeekKey();
+  const weeklyLogs = progress.activityLog.filter((item) => {
+    const diff = getDayDifference(weekStart, item.dateKey);
+    return diff >= 0 && diff < 7;
+  });
+
+  return weeklyLogs.reduce(
+    (summary, item) => {
+      const stat = ["STR", "INT", "END", "DEX"].includes(item.stat) ? item.stat : inferQuestStat({ title: item.questTitle });
+      return {
+        completed: summary.completed + 1,
+        xp: summary.xp + item.xpReward,
+        gold: summary.gold + item.goldReward,
+        stats: {
+          ...summary.stats,
+          [stat]: summary.stats[stat] + 1,
+        },
+      };
+    },
+    {
+      completed: 0,
+      xp: 0,
+      gold: 0,
+      stats: {
+        STR: 0,
+        INT: 0,
+        END: 0,
+        DEX: 0,
+      },
+    },
+  );
+}
+
+function formatWeeklyStatGrowth(stats) {
+  const entries = ["STR", "INT", "END", "DEX"]
+    .map((stat) => ({ stat, value: stats[stat] || 0 }))
+    .filter((item) => item.value > 0);
+
+  if (entries.length === 0) {
+    return "まだありません";
+  }
+
+  return entries.map((item) => `${getStatLabel(item.stat)} +${item.value}`).join(" / ");
 }
 
 function getEstimatedQuestCountToLevel(xp) {
@@ -1300,6 +1393,7 @@ function completeQuest(questId, sourceElement) {
         completedAt: completedAtIso,
         dateKey: getDateKey(completedAt),
         completedHour,
+        stat: quest.stat,
       },
       ...progress.activityLog,
     ].slice(0, 50),
@@ -1313,6 +1407,7 @@ function completeQuest(questId, sourceElement) {
 
   saveProgress();
   render();
+  notifyWeeklyReport();
   playQuestCompleteAnimation(quest.id);
   queueXpChangeAnimation(getLevel(progress.xp) > previousLevel ? 0 : previousLevelProgress);
   showRewardFeedback(quest);
@@ -1372,23 +1467,6 @@ function confirmCompleteQuest() {
     sourceElement?.classList.remove("is-pressing");
     completeQuest(questId, sourceElement);
   }, 180);
-}
-
-function resetProgress() {
-  if (!isParentMode) {
-    return;
-  }
-
-  const confirmed = window.confirm("進行状況をリセットしますか？");
-  if (!confirmed) {
-    return;
-  }
-
-  progress = { ...defaultProgress };
-  unlockedAchievements = [];
-  saveProgress();
-  saveAchievements();
-  render();
 }
 
 function setBackupMessage(message, isError = false) {
@@ -1530,6 +1608,110 @@ function handleBackupFileChange(event) {
     input.value = "";
   });
   reader.readAsText(file);
+}
+
+function setResetMessage(message, isError = false) {
+  const element = document.querySelector("[data-reset-message]");
+  if (!element) {
+    return;
+  }
+
+  element.textContent = message;
+  element.classList.toggle("is-error", isError);
+}
+
+function getResetTargetLabel(target) {
+  const labels = {
+    "quest-completions": "クエスト完了状態",
+    progress: "Gold / XP / レベル",
+    achievements: "実績バッジ",
+    login: "ログインボーナス / 連続ログイン",
+    all: "すべてのデータ",
+  };
+  return labels[target] || labels["quest-completions"];
+}
+
+function applyResetTarget(target) {
+  if (target === "quest-completions") {
+    progress = {
+      ...progress,
+      completedQuestIds: [],
+    };
+    saveProgress();
+    return;
+  }
+
+  if (target === "progress") {
+    progress = {
+      ...progress,
+      xp: 0,
+      gold: 0,
+      totalGoldEarned: 0,
+      titleHistory: [],
+    };
+    saveProgress();
+    return;
+  }
+
+  if (target === "achievements") {
+    unlockedAchievements = [];
+    saveAchievements();
+    return;
+  }
+
+  if (target === "login") {
+    progress = {
+      ...progress,
+      lastLoginBonusDate: "",
+      loginStreak: 0,
+      totalLoginDays: 0,
+    };
+    saveProgress();
+    return;
+  }
+
+  if (target === "all") {
+    BACKUP_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    progress = getDefaultProgressState();
+    managedQuests = getDefaultManagedQuests();
+    rewards = [];
+    rewardHistory = [];
+    unlockedAchievements = [];
+    saveProgress();
+    saveManagedQuests();
+    saveRewards();
+    saveRewardHistory();
+    saveAchievements();
+  }
+}
+
+function resetSelectedData() {
+  if (!isParentMode) {
+    setResetMessage("親モード中のみリセットできます", true);
+    return;
+  }
+
+  const select = document.querySelector("[data-reset-target]");
+  const target = select?.value || "quest-completions";
+  const label = getResetTargetLabel(target);
+  const firstConfirmed = window.confirm(`${label}をリセットしますか？\n先にバックアップを取ることをおすすめします。`);
+  if (!firstConfirmed) {
+    setResetMessage("リセットをキャンセルしました");
+    return;
+  }
+
+  const secondConfirmed = window.confirm("この操作は元に戻せません。実行しますか？");
+  if (!secondConfirmed) {
+    setResetMessage("リセットをキャンセルしました");
+    return;
+  }
+
+  applyResetTarget(target);
+  editingQuestId = null;
+  editingRewardId = null;
+  isQuestCreateOpen = false;
+  render();
+  setResetMessage(`${label}をリセットしました`);
 }
 
 function renderDevTools() {
@@ -2551,6 +2733,7 @@ function showClearFeedback() {
 
 function renderGrowthRecord(level, title) {
   const todayGrowth = getTodayGrowth();
+  const weeklyReport = getWeeklyReport();
   const xpToNext = getXpToNextLevel(progress.xp);
   const estimatedCount = getEstimatedQuestCountToLevel(progress.xp);
   const subTitle = getSubTitle(progress.stats);
@@ -2558,6 +2741,15 @@ function renderGrowthRecord(level, title) {
   setText("[data-today-completed]", todayGrowth.completed);
   setText("[data-today-xp]", todayGrowth.xp);
   setText("[data-today-gold]", todayGrowth.gold);
+  setText("[data-weekly-completed]", weeklyReport.completed);
+  setText("[data-weekly-xp]", weeklyReport.xp);
+  setText("[data-weekly-gold]", weeklyReport.gold);
+  setText("[data-weekly-stat-growth]", formatWeeklyStatGrowth(weeklyReport.stats));
+  setText("[data-weekly-login-streak]", `${progress.loginStreak || 0}日`);
+  const weeklyEmpty = document.querySelector("[data-weekly-empty]");
+  if (weeklyEmpty) {
+    weeklyEmpty.hidden = weeklyReport.completed > 0;
+  }
   setText("[data-record-streak-current]", progress.streak.current);
   setText("[data-record-streak-best]", progress.streak.best);
   setText("[data-goal-xp]", `あと${xpToNext}XP`);
@@ -2845,6 +3037,12 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const resetExecuteButton = event.target.closest("[data-admin-reset-execute]");
+  if (resetExecuteButton) {
+    resetSelectedData();
+    return;
+  }
+
   const toggleQuestCreateButton = event.target.closest("[data-toggle-quest-create]");
   if (toggleQuestCreateButton) {
     if (!isParentUnlocked) {
@@ -2926,7 +3124,6 @@ document.querySelector("[data-quest-create-form]")?.addEventListener("submit", h
 document.querySelector("[data-reward-create-form]")?.addEventListener("submit", handleRewardCreateSubmit);
 document.addEventListener("submit", handleQuestEditSubmit);
 document.addEventListener("submit", handleRewardEditSubmit);
-document.querySelector("[data-reset]").addEventListener("click", resetProgress);
 
 if (!progress.visitedScreens.includes("home")) {
   progress = {
@@ -2940,6 +3137,7 @@ render();
 if (loginBonusResult.granted) {
   showLoginBonusToast(loginBonusResult);
 }
+notifyWeeklyReport();
 const startupAchievements = checkAchievements({ showToast: false });
 if (startupAchievements.length > 0) {
   window.setTimeout(() => showAchievementToast(startupAchievements), loginBonusResult.granted ? 2200 : 350);

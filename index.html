@@ -16,7 +16,6 @@
         <div class="parent-mode-tools" data-parent-mode-only hidden>
           <span>ギルドマスター管理中</span>
           <button class="parent-mode-exit" type="button" data-parent-mode-exit>解除</button>
-          <button class="reset-button" type="button" data-reset>リセット</button>
         </div>
       </header>
 
@@ -186,6 +185,38 @@
               <article>
                 <span>獲得Gold</span>
                 <strong><span data-today-gold>0</span><span class="growth-unit">G</span></strong>
+              </article>
+            </div>
+          </section>
+
+          <section class="growth-panel weekly-report-panel" aria-labelledby="weekly-report-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Weekly</p>
+              <h3 id="weekly-report-title">週間レポート</h3>
+            </div>
+            <p class="weekly-empty" data-weekly-empty hidden>今週の記録はまだありません</p>
+            <div class="growth-summary-grid weekly-report-grid">
+              <article>
+                <span>達成</span>
+                <strong><span data-weekly-completed>0</span><span class="growth-unit">件</span></strong>
+              </article>
+              <article>
+                <span>獲得XP</span>
+                <strong><span data-weekly-xp>0</span><span class="growth-unit">XP</span></strong>
+              </article>
+              <article>
+                <span>獲得Gold</span>
+                <strong><span data-weekly-gold>0</span><span class="growth-unit">G</span></strong>
+              </article>
+            </div>
+            <div class="weekly-detail-list">
+              <article>
+                <span>伸びたステータス</span>
+                <strong data-weekly-stat-growth>まだありません</strong>
+              </article>
+              <article>
+                <span>連続ログイン</span>
+                <strong data-weekly-login-streak>0日</strong>
               </article>
             </div>
           </section>
@@ -406,6 +437,22 @@
             </div>
             <input class="backup-file-input" type="file" accept="application/json,.json" data-backup-file hidden>
             <p class="form-message backup-message" data-backup-message aria-live="polite"></p>
+          </section>
+          <section class="future-form reset-panel" data-parent-mode-only aria-labelledby="reset-title" hidden>
+            <h3 id="reset-title">データリセット</h3>
+            <p class="reset-warning">先にバックアップを取ることをおすすめします。リセット後は元に戻せません。</p>
+            <label>
+              リセット対象
+              <select data-reset-target>
+                <option value="quest-completions">クエスト完了状態だけリセット</option>
+                <option value="progress">Gold / XP / レベルをリセット</option>
+                <option value="achievements">実績バッジをリセット</option>
+                <option value="login">ログインボーナス / 連続ログインをリセット</option>
+                <option value="all">すべてのデータをリセット</option>
+              </select>
+            </label>
+            <button class="quest-manage-button is-danger" type="button" data-admin-reset-execute>選択したデータをリセット</button>
+            <p class="form-message reset-message" data-reset-message aria-live="polite"></p>
           </section>
         </section>
       </main>

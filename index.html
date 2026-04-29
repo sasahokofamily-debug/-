@@ -73,7 +73,19 @@
               <span>最高記録</span>
               <strong data-streak-best>0日</strong>
             </div>
+            <div>
+              <span>連続ログイン</span>
+              <strong data-login-streak>0日</strong>
+            </div>
           </div>
+
+          <section class="recent-achievements" aria-labelledby="recent-achievements-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Badge</p>
+              <h3 id="recent-achievements-title">最近の実績</h3>
+            </div>
+            <div class="recent-achievement-list" data-recent-achievement-list></div>
+          </section>
 
           <section class="today-quests" aria-labelledby="today-quests-title">
             <div class="mini-section-heading">
@@ -230,6 +242,17 @@
               </article>
             </div>
           </section>
+
+          <section class="growth-panel" aria-labelledby="achievement-title">
+            <div class="mini-section-heading achievement-heading">
+              <div>
+                <p class="section-kicker">Badge</p>
+                <h3 id="achievement-title">実績</h3>
+              </div>
+              <strong data-achievement-count>0 / 100</strong>
+            </div>
+            <div class="achievement-list" data-achievement-list></div>
+          </section>
         </section>
 
         <section class="screen" id="rewards" data-screen="rewards" aria-labelledby="rewards-title">
@@ -288,6 +311,14 @@
                 <option value="normal">通常クエスト</option>
                 <option value="urgent">緊急クエスト</option>
                 <option value="boss">ボスクエスト</option>
+              </select>
+            </label>
+            <label>
+              優先度
+              <select name="priority">
+                <option value="high">高</option>
+                <option value="medium" selected>中</option>
+                <option value="low">低</option>
               </select>
             </label>
             <label>
@@ -366,13 +397,36 @@
             <h3 id="reward-history-title">交換履歴</h3>
             <div class="reward-history-list" data-reward-history-list></div>
           </section>
+          <section class="future-form backup-panel" aria-labelledby="backup-title">
+            <h3 id="backup-title">データ保管</h3>
+            <p>この端末に保存されている進行状況、クエスト、ご褒美、実績をJSONファイルとして保管できます。</p>
+            <div class="backup-actions">
+              <button class="quest-manage-button" type="button" data-backup-download>バックアップをダウンロード</button>
+              <button class="quest-manage-button is-secondary" type="button" data-backup-import>バックアップを読み込む</button>
+            </div>
+            <input class="backup-file-input" type="file" accept="application/json,.json" data-backup-file hidden>
+            <p class="form-message backup-message" data-backup-message aria-live="polite"></p>
+          </section>
         </section>
       </main>
 
       <div class="reward-toast" data-reward-toast aria-live="polite"></div>
+      <div class="login-bonus-toast" data-login-bonus-toast aria-live="polite"></div>
+      <div class="achievement-toast" data-achievement-toast aria-live="polite"></div>
       <div class="clear-toast" data-clear-toast aria-live="polite"></div>
       <div class="level-up-toast" data-level-up-toast aria-live="polite">レベルアップ！</div>
       <div class="evolution-toast" data-evolution-toast aria-live="polite"></div>
+      <div class="complete-confirm" data-complete-confirm hidden>
+        <div class="complete-confirm-card" role="dialog" aria-modal="true" aria-labelledby="complete-confirm-title">
+          <p class="section-kicker">Quest Clear</p>
+          <h3 id="complete-confirm-title" data-complete-confirm-title>このクエストを達成しますか？</h3>
+          <p>達成するとXP、Gold、能力値が増えます。</p>
+          <div class="complete-confirm-actions">
+            <button class="complete-confirm-yes" type="button" data-complete-confirm-yes>はい</button>
+            <button class="complete-confirm-cancel" type="button" data-complete-confirm-cancel>キャンセル</button>
+          </div>
+        </div>
+      </div>
 
       <nav class="bottom-nav" aria-label="主要画面">
         <button class="nav-item is-active" type="button" data-nav="home" aria-controls="home">

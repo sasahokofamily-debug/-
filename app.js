@@ -3,10 +3,27 @@ const QUESTS_KEY = "sora_guild_app_quests_dev";
 const LEGACY_CUSTOM_QUESTS_KEY = "sora_guild_app_custom_quests_dev";
 const REWARDS_KEY = "sora_guild_app_rewards_dev";
 const REWARD_HISTORY_KEY = "sora_guild_app_reward_history_dev";
+const ACHIEVEMENTS_KEY = "guildAchievements";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 const isTestMode = false;
 const PARENT_PIN = "1234";
+const LOGIN_BONUS_GOLD = 10;
+const LOGIN_STREAK_BONUS_GOLD = 50;
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+const ACHIEVEMENT_MENU_IDS = ["home", "quests", "growth", "rewards", "admin"];
+const QUEST_PRIORITY_ORDER = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+const BACKUP_STORAGE_KEYS = [
+  STORAGE_KEY,
+  QUESTS_KEY,
+  LEGACY_CUSTOM_QUESTS_KEY,
+  REWARDS_KEY,
+  REWARD_HISTORY_KEY,
+  ACHIEVEMENTS_KEY,
+];
 
 const defaultProgress = {
   name: "そら",
@@ -26,6 +43,12 @@ const defaultProgress = {
   },
   activityLog: [],
   titleHistory: [],
+  lastLoginBonusDate: "",
+  loginStreak: 0,
+  totalLoginDays: 0,
+  totalGoldEarned: 0,
+  questCompletedWeekdays: [],
+  visitedScreens: [],
 };
 
 const defaultQuests = [
@@ -191,12 +214,18 @@ let progress = loadProgress();
 let managedQuests = loadManagedQuests();
 let rewards = loadRewards();
 let rewardHistory = loadRewardHistory();
+let unlockedAchievements = loadAchievements();
+progress = reconcileProgressFromHistory(progress);
 let rewardToastTimer;
 let clearToastTimer;
 let levelUpTimer;
 let evolutionTimer;
 let xpChangeTimer;
 let questCompleteTimer;
+let loginBonusTimer;
+let achievementToastTimer;
+let pendingCompleteQuestId = "";
+let pendingCompleteSourceElement = null;
 let pendingXpAnimationStart = null;
 let currentCharacterSrc = "";
 let currentTitleName = "";
@@ -224,10 +253,37 @@ function loadProgress() {
       streak: normalizeStreak(parsed.streak),
       activityLog: Array.isArray(parsed.activityLog) ? parsed.activityLog.map(normalizeActivityLogItem).filter(Boolean) : [],
       titleHistory: Array.isArray(parsed.titleHistory) ? parsed.titleHistory.map(normalizeTitleHistoryItem).filter(Boolean) : [],
+      lastLoginBonusDate: typeof parsed.lastLoginBonusDate === "string" ? parsed.lastLoginBonusDate : "",
+      loginStreak: Number.isFinite(parsed.loginStreak) ? Math.max(0, Math.round(parsed.loginStreak)) : 0,
+      totalLoginDays: Number.isFinite(parsed.totalLoginDays)
+        ? Math.max(0, Math.round(parsed.totalLoginDays))
+        : Math.max(parsed.loginStreak || 0, parsed.lastLoginBonusDate ? 1 : 0),
+      totalGoldEarned: Number.isFinite(parsed.totalGoldEarned) ? Math.max(0, Math.round(parsed.totalGoldEarned)) : Math.max(0, parsed.gold || 0),
+      totalQuestCompletions: Number.isFinite(parsed.totalQuestCompletions)
+        ? Math.max(0, Math.round(parsed.totalQuestCompletions))
+        : Math.max(
+            Array.isArray(parsed.activityLog) ? parsed.activityLog.length : 0,
+            Array.isArray(parsed.completedQuestIds) ? parsed.completedQuestIds.length : 0,
+          ),
+      questCompletedWeekdays: normalizeNumberList(parsed.questCompletedWeekdays, 0, 6),
+      visitedScreens: normalizeStringList(parsed.visitedScreens),
     };
   } catch {
     return { ...defaultProgress };
   }
+}
+
+function normalizeStringList(rawList) {
+  return Array.isArray(rawList) ? [...new Set(rawList.map(String).filter(Boolean))] : [];
+}
+
+function normalizeNumberList(rawList, min, max) {
+  if (!Array.isArray(rawList)) {
+    return [];
+  }
+  return [...new Set(rawList.map(Number))]
+    .filter((value) => Number.isInteger(value) && value >= min && value <= max)
+    .sort((a, b) => a - b);
 }
 
 function normalizeStats(rawStats = {}) {
@@ -241,6 +297,63 @@ function normalizeStats(rawStats = {}) {
 
 function saveProgress() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+}
+
+function loadAchievements() {
+  try {
+    const stored = localStorage.getItem(ACHIEVEMENTS_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return normalizeStringList(parsed);
+  } catch {
+    return [];
+  }
+}
+
+function saveAchievements() {
+  localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(unlockedAchievements));
+}
+
+function reconcileProgressFromHistory(currentProgress) {
+  const spentGold = rewardHistory.reduce((total, item) => total + item.cost, 0);
+  return {
+    ...currentProgress,
+    totalGoldEarned: Math.max(currentProgress.totalGoldEarned || 0, (currentProgress.gold || 0) + spentGold),
+    totalQuestCompletions: Math.max(
+      currentProgress.totalQuestCompletions || 0,
+      currentProgress.activityLog.length,
+      currentProgress.completedQuestIds.length,
+    ),
+    questCompletedWeekdays: normalizeNumberList(currentProgress.questCompletedWeekdays, 0, 6),
+    visitedScreens: normalizeStringList(currentProgress.visitedScreens),
+  };
+}
+
+function applyLoginBonus() {
+  const today = getDateKey();
+  if (progress.lastLoginBonusDate === today) {
+    return {
+      granted: false,
+      streakBonus: false,
+    };
+  }
+
+  const dayDifference = progress.lastLoginBonusDate ? getDayDifference(progress.lastLoginBonusDate, today) : Number.POSITIVE_INFINITY;
+  const nextLoginStreak = dayDifference === 1 ? Math.max(0, progress.loginStreak) + 1 : 1;
+  const streakBonus = nextLoginStreak === 7;
+
+  progress = {
+    ...progress,
+    gold: progress.gold + LOGIN_BONUS_GOLD + (streakBonus ? LOGIN_STREAK_BONUS_GOLD : 0),
+    loginStreak: nextLoginStreak,
+    totalLoginDays: Math.max(0, progress.totalLoginDays || 0) + 1,
+    totalGoldEarned: Math.max(0, progress.totalGoldEarned || progress.gold || 0) + LOGIN_BONUS_GOLD + (streakBonus ? LOGIN_STREAK_BONUS_GOLD : 0),
+    lastLoginBonusDate: today,
+  };
+  saveProgress();
+  return {
+    granted: true,
+    streakBonus,
+  };
 }
 
 function getJapanDateParts(date = new Date()) {
@@ -280,6 +393,16 @@ function getWeekKey(date = new Date()) {
 function getJapanDayOfWeek(date = new Date()) {
   const { year, month, day } = getJapanDateParts(date);
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+function getJapanHour(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("ja-JP-u-ca-gregory", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  return Number.isFinite(hour) ? hour : date.getHours();
 }
 
 function getDayDifference(fromDateKey, toDateKey) {
@@ -360,6 +483,7 @@ function normalizeActivityLogItem(rawItem) {
     goldReward: Math.max(0, Math.round(goldReward)),
     completedAt,
     dateKey: typeof rawItem.dateKey === "string" ? rawItem.dateKey : getDateKey(new Date(completedAt)),
+    completedHour: Number.isFinite(rawItem.completedHour) ? Math.max(0, Math.min(23, Math.round(rawItem.completedHour))) : getJapanHour(new Date(completedAt)),
   };
 }
 
@@ -414,6 +538,7 @@ function normalizeQuest(rawQuest) {
   const goldReward = Number(rawQuest.goldReward);
   const title = String(rawQuest.title || "").trim();
   const type = ["normal", "urgent", "boss"].includes(rawQuest.type) ? rawQuest.type : "normal";
+  const priority = ["high", "medium", "low"].includes(rawQuest.priority) ? rawQuest.priority : "medium";
   const frequency = ["once", "daily", "weekly", "weekday"].includes(rawQuest.frequency) ? rawQuest.frequency : "daily";
   const stat = ["STR", "INT", "END", "DEX"].includes(rawQuest.stat) ? rawQuest.stat : inferQuestStat(rawQuest);
   const scheduleDays = normalizeScheduleDays(rawQuest.scheduleDays);
@@ -426,6 +551,7 @@ function normalizeQuest(rawQuest) {
     id: String(rawQuest.id || `parent-${Date.now()}`),
     title,
     type,
+    priority,
     frequency,
     scheduleDays,
     stat,
@@ -624,8 +750,25 @@ function isQuestVisible(quest) {
   return true;
 }
 
+function sortQuestsForDisplay(quests) {
+  const originalOrder = new Map(quests.map((quest, index) => [quest.id, index]));
+  return [...quests].sort((a, b) => {
+    const completedDiff = Number(isQuestCompleted(a)) - Number(isQuestCompleted(b));
+    if (completedDiff !== 0) {
+      return completedDiff;
+    }
+
+    const priorityDiff = (QUEST_PRIORITY_ORDER[a.priority] ?? QUEST_PRIORITY_ORDER.medium) - (QUEST_PRIORITY_ORDER[b.priority] ?? QUEST_PRIORITY_ORDER.medium);
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+
+    return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0);
+  });
+}
+
 function getVisibleQuests() {
-  return getAllQuests().filter(isQuestVisible);
+  return sortQuestsForDisplay(getAllQuests().filter(isQuestVisible));
 }
 
 function getQuestTypeLabel(type) {
@@ -657,6 +800,16 @@ function getQuestFrequencyLabel(frequency, scheduleDays = []) {
     return getScheduleDaysLabel(scheduleDays);
   }
   return "毎日";
+}
+
+function getQuestPriorityLabel(priority) {
+  if (priority === "high") {
+    return "優先 高";
+  }
+  if (priority === "low") {
+    return "優先 低";
+  }
+  return "優先 中";
 }
 
 function getStatLabel(stat) {
@@ -810,6 +963,264 @@ function getEstimatedQuestCountToLevel(xp) {
   return Math.max(1, Math.ceil(getXpToNextLevel(xp) / Math.max(averageXp, 1)));
 }
 
+function makeAchievement(id, name, description, conditionText, icon, isUnlocked) {
+  return {
+    id,
+    name,
+    description,
+    conditionText,
+    icon,
+    isUnlocked,
+  };
+}
+
+const questAchievementData = [
+  ["quest-1", "はじめの一歩", 1],
+  ["quest-3", "見習い冒険者", 3],
+  ["quest-5", "小さな依頼人", 5],
+  ["quest-10", "駆け出しの旅人", 10],
+  ["quest-15", "村の助っ人", 15],
+  ["quest-20", "まじめな冒険者", 20],
+  ["quest-30", "依頼の達人", 30],
+  ["quest-50", "努力の星", 50],
+  ["quest-75", "ギルドの期待株", 75],
+  ["quest-100", "百の依頼を越えて", 100],
+  ["quest-150", "頼れる仲間", 150],
+  ["quest-200", "冒険の職人", 200],
+  ["quest-300", "こつこつ勇者", 300],
+  ["quest-500", "ギルドの柱", 500],
+  ["quest-1000", "伝説への道", 1000],
+];
+
+const loginStreakAchievementData = [
+  ["login-streak-1", "ただいまギルド", 1],
+  ["login-streak-3", "3日続いた旅", 3],
+  ["login-streak-7", "7日連続の勇者", 7],
+  ["login-streak-10", "10日の足あと", 10],
+  ["login-streak-14", "2週間の冒険者", 14],
+  ["login-streak-21", "21日の努力家", 21],
+  ["login-streak-30", "30日の守り人", 30],
+  ["login-streak-60", "季節を越える者", 60],
+  ["login-streak-100", "百日修行", 100],
+  ["login-streak-365", "毎日の英雄", 365],
+];
+
+const totalLoginAchievementData = [
+  ["login-total-1", "ギルド初訪問", 1],
+  ["login-total-5", "いつもの顔", 5],
+  ["login-total-10", "常連冒険者", 10],
+  ["login-total-30", "ギルドの住人", 30],
+  ["login-total-50", "信頼の旅人", 50],
+  ["login-total-100", "百日の記録", 100],
+  ["login-total-200", "長旅の仲間", 200],
+  ["login-total-365", "年間冒険者", 365],
+];
+
+const xpAchievementData = [
+  ["xp-100", "はじめての経験", 100],
+  ["xp-500", "小さな成長", 500],
+  ["xp-1000", "学びの光", 1000],
+  ["xp-3000", "努力の結晶", 3000],
+  ["xp-5000", "成長の証", 5000],
+  ["xp-10000", "経験の旅人", 10000],
+  ["xp-30000", "知恵の冒険者", 30000],
+  ["xp-50000", "伝説の経験値", 50000],
+];
+
+const goldAchievementData = [
+  ["gold-10", "はじめての金貨", 10],
+  ["gold-50", "小さな財布", 50],
+  ["gold-100", "金貨集めの見習い", 100],
+  ["gold-300", "がんばり貯金", 300],
+  ["gold-500", "黄金の努力家", 500],
+  ["gold-1000", "宝箱の管理人", 1000],
+  ["gold-3000", "金貨の旅商人", 3000],
+  ["gold-5000", "黄金ギルドの仲間", 5000],
+];
+
+const rewardAchievementData = [
+  ["reward-1", "はじめての交換", 1],
+  ["reward-3", "小さな楽しみ", 3],
+  ["reward-5", "ご褒美ハンター", 5],
+  ["reward-10", "交換の達人", 10],
+  ["reward-20", "楽しみ上手", 20],
+  ["reward-50", "願いを叶える者", 50],
+];
+
+const levelAchievementData = [
+  ["level-2", "レベルアップの音", 2],
+  ["level-5", "ぐんぐん成長中", 5],
+  ["level-10", "若き冒険者", 10],
+  ["level-20", "中堅ギルド員", 20],
+  ["level-30", "頼れる先輩", 30],
+  ["level-50", "熟練の冒険者", 50],
+  ["level-75", "英雄候補", 75],
+  ["level-100", "伝説の入口", 100],
+];
+
+const statAchievementData = [
+  ["stat-str-10", "力の芽生え", "STR", "力", 10],
+  ["stat-str-30", "力自慢", "STR", "力", 30],
+  ["stat-str-50", "剛腕の冒険者", "STR", "力", 50],
+  ["stat-int-10", "賢さの芽生え", "INT", "賢さ", 10],
+  ["stat-int-30", "ひらめき名人", "INT", "賢さ", 30],
+  ["stat-int-50", "知恵の探検家", "INT", "賢さ", 50],
+  ["stat-end-10", "忍耐の芽生え", "END", "忍耐力", 10],
+  ["stat-end-30", "あきらめない心", "END", "忍耐力", 30],
+  ["stat-end-50", "粘り強き勇者", "END", "忍耐力", 50],
+  ["stat-dex-10", "器用さの芽生え", "DEX", "器用さ", 10],
+  ["stat-dex-30", "手先の名人", "DEX", "器用さ", 30],
+  ["stat-dex-50", "技の冒険者", "DEX", "器用さ", 50],
+];
+
+const balanceAchievementData = [
+  ["balance-10", "そろった力", 10],
+  ["balance-20", "バランス冒険者", 20],
+  ["balance-30", "四つの才能", 30],
+  ["balance-40", "万能の見習い", 40],
+  ["balance-50", "ギルドの万能者", 50],
+];
+
+const weekdayAchievementData = [
+  ["weekday-1", "月曜の一歩", 1, "月曜日"],
+  ["weekday-2", "火曜の努力家", 2, "火曜日"],
+  ["weekday-3", "水曜のひらめき", 3, "水曜日"],
+  ["weekday-4", "木曜のねばり", 4, "木曜日"],
+  ["weekday-5", "金曜の達成者", 5, "金曜日"],
+  ["weekday-6", "土曜の冒険者", 6, "土曜日"],
+  ["weekday-0", "日曜の勇者", 0, "日曜日"],
+];
+
+const ACHIEVEMENTS = [
+  ...questAchievementData.map(([id, name, count]) =>
+    makeAchievement(id, name, "クエスト達成を積み重ねた証", `クエスト${count}回達成`, "📜", (ctx) => ctx.questTotal >= count),
+  ),
+  ...loginStreakAchievementData.map(([id, name, days]) =>
+    makeAchievement(id, name, "毎日ギルドへ通った証", `${days}日連続ログイン`, "🔥", (ctx) => ctx.loginStreak >= days),
+  ),
+  ...totalLoginAchievementData.map(([id, name, days]) =>
+    makeAchievement(id, name, "ギルドを訪れ続けた記録", `累計${days}日ログイン`, "🏰", (ctx) => ctx.totalLoginDays >= days),
+  ),
+  ...xpAchievementData.map(([id, name, xp]) =>
+    makeAchievement(id, name, "経験を積み重ねた証", `累計XP${xp}獲得`, "✨", (ctx) => ctx.xp >= xp),
+  ),
+  ...goldAchievementData.map(([id, name, gold]) =>
+    makeAchievement(id, name, "金貨を集めた努力の証", `累計Gold${gold}獲得`, "🪙", (ctx) => ctx.totalGoldEarned >= gold),
+  ),
+  ...rewardAchievementData.map(([id, name, count]) =>
+    makeAchievement(id, name, "ご褒美を上手に使った証", `ご褒美を${count}回交換`, "🎁", (ctx) => ctx.rewardExchangeCount >= count),
+  ),
+  ...levelAchievementData.map(([id, name, level]) =>
+    makeAchievement(id, name, "レベルアップで成長した証", `Lv${level}到達`, "⭐", (ctx) => ctx.level >= level),
+  ),
+  ...statAchievementData.map(([id, name, stat, label, value]) =>
+    makeAchievement(id, name, "能力が伸びた証", `${label}が${value}到達`, "⚔", (ctx) => ctx.stats[stat] >= value),
+  ),
+  ...balanceAchievementData.map(([id, name, value]) =>
+    makeAchievement(id, name, "4つの能力をバランスよく育てた証", `全ステータス${value}到達`, "⚖", (ctx) => Object.values(ctx.stats).every((stat) => stat >= value)),
+  ),
+  ...weekdayAchievementData.map(([id, name, day, label]) =>
+    makeAchievement(id, name, "曜日ごとの挑戦を達成した証", `${label}にクエスト達成`, "🗓", (ctx) => ctx.questWeekdays.includes(day)),
+  ),
+  makeAchievement("weekday-all", "一週間制覇", "すべての曜日で挑戦した証", "月〜日すべてでクエスト達成", "🌈", (ctx) => [0, 1, 2, 3, 4, 5, 6].every((day) => ctx.questWeekdays.includes(day))),
+  makeAchievement("morning-quest", "朝の冒険者", "午前中に動き出せた証", "午前中にクエスト達成", "🌅", (ctx) => ctx.hasMorningQuest),
+  makeAchievement("night-quest", "夜の努力家", "夜にも努力できた証", "夜にクエスト達成", "🌙", (ctx) => ctx.hasNightQuest),
+  makeAchievement("today-1", "今日もできた", "今日の一歩を刻んだ証", "1日に1個クエスト達成", "✅", (ctx) => ctx.todayCompleted >= 1),
+  makeAchievement("today-3", "すごい集中力", "今日の集中が光った証", "1日に3個クエスト達成", "💫", (ctx) => ctx.todayCompleted >= 3),
+  makeAchievement("today-5", "クエストラッシュ", "一気に進めた証", "1日に5個クエスト達成", "⚡", (ctx) => ctx.todayCompleted >= 5),
+  makeAchievement("first-stat", "小さな勝利", "はじめて能力が伸びた証", "はじめてステータスが上がる", "🌱", (ctx) => Object.values(ctx.stats).some((stat) => stat > 0)),
+  makeAchievement("first-title", "初めての称号", "新しい称号を得た証", "はじめて称号が変わる", "🏷", (ctx) => ctx.level >= 2 || progress.titleHistory.length > 0),
+  makeAchievement("first-gold", "宝箱を開く者", "はじめて金貨を受け取った証", "はじめてGoldを受け取る", "🧰", (ctx) => ctx.totalGoldEarned >= 10),
+  makeAchievement("view-growth", "成長の記録者", "成長を見つめた証", "成長画面を開く", "📖", (ctx) => ctx.visitedScreens.includes("growth")),
+  makeAchievement("all-menu", "ギルドを歩く者", "すべての場所を訪れた証", "全メニューを1回ずつ開く", "🧭", (ctx) => ACHIEVEMENT_MENU_IDS.every((screen) => ctx.visitedScreens.includes(screen))),
+  makeAchievement("weekly-10", "続ける才能", "7日間の積み重ねの証", "7日間で合計10クエスト達成", "🕯", (ctx) => ctx.recentQuestCount(7) >= 10),
+  makeAchievement("monthly-50", "小さな伝説", "30日間の努力の証", "30日間で合計50クエスト達成", "👑", (ctx) => ctx.recentQuestCount(30) >= 50),
+];
+
+function getAchievementContext() {
+  const stats = normalizeStats(progress.stats);
+  const todayGrowth = getTodayGrowth();
+  const questTotal = Math.max(
+    progress.totalQuestCompletions || 0,
+    progress.activityLog.length,
+    progress.completedQuestIds.length,
+  );
+  const questWeekdays = normalizeNumberList(progress.questCompletedWeekdays, 0, 6);
+  const totalGoldEarned = Math.max(progress.totalGoldEarned || 0, progress.gold || 0);
+  const recentQuestCount = (days) =>
+    progress.activityLog.filter((item) => {
+      const diff = getDayDifference(item.dateKey, getDateKey());
+      return diff >= 0 && diff < days;
+    }).length;
+
+  return {
+    questTotal,
+    loginStreak: progress.loginStreak || 0,
+    totalLoginDays: progress.totalLoginDays || 0,
+    xp: progress.xp || 0,
+    totalGoldEarned,
+    rewardExchangeCount: rewardHistory.length,
+    level: getLevel(progress.xp),
+    stats,
+    questWeekdays,
+    todayCompleted: todayGrowth.completed,
+    hasMorningQuest: progress.activityLog.some((item) => item.completedHour < 12),
+    hasNightQuest: progress.activityLog.some((item) => item.completedHour >= 18),
+    visitedScreens: normalizeStringList(progress.visitedScreens),
+    recentQuestCount,
+  };
+}
+
+function checkAchievements({ showToast = true } = {}) {
+  const context = getAchievementContext();
+  const newlyUnlocked = ACHIEVEMENTS.filter((achievement) => !unlockedAchievements.includes(achievement.id) && achievement.isUnlocked(context));
+  if (newlyUnlocked.length === 0) {
+    return [];
+  }
+
+  unlockedAchievements = [...unlockedAchievements, ...newlyUnlocked.map((achievement) => achievement.id)];
+  saveAchievements();
+  renderAchievements();
+  renderRecentAchievements();
+  if (showToast) {
+    showAchievementToast(newlyUnlocked);
+  }
+  return newlyUnlocked;
+}
+
+function showAchievementToast(achievements) {
+  const toast = document.querySelector("[data-achievement-toast]");
+  if (!toast || achievements.length === 0) {
+    return;
+  }
+
+  const message =
+    achievements.length === 1
+      ? `実績解除！ ${achievements[0].name}`
+      : `実績解除！ ${achievements.length}件の実績を達成`;
+  toast.textContent = message;
+  toast.classList.remove("is-visible");
+  void toast.offsetWidth;
+  toast.classList.add("is-visible");
+
+  window.clearTimeout(achievementToastTimer);
+  achievementToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
+}
+
+function markScreenVisited(screenId) {
+  const achievementScreenId = screenId === "admin-auth" ? "admin" : screenId;
+  if (!ACHIEVEMENT_MENU_IDS.includes(achievementScreenId) || progress.visitedScreens.includes(achievementScreenId)) {
+    return;
+  }
+
+  progress = {
+    ...progress,
+    visitedScreens: [...progress.visitedScreens, achievementScreenId],
+  };
+  saveProgress();
+  checkAchievements();
+}
+
 function getPreviousTitleForRecord(level) {
   const currentTitle = getTitle(level);
   const storedPrevious = progress.titleHistory.find((item) => item.name !== currentTitle.name);
@@ -861,6 +1272,8 @@ function completeQuest(questId, sourceElement) {
   const sourceRect = sourceElement?.getBoundingClientRect();
   const completedAt = new Date();
   const completedAtIso = completedAt.toISOString();
+  const completedHour = getJapanHour(completedAt);
+  const completedWeekday = getJapanDayOfWeek(completedAt);
   const nextXp = progress.xp + quest.xpReward;
   const nextLevel = getLevel(nextXp);
   const currentStats = normalizeStats(progress.stats);
@@ -869,6 +1282,9 @@ function completeQuest(questId, sourceElement) {
     ...progress,
     xp: nextXp,
     gold: progress.gold + quest.goldReward,
+    totalGoldEarned: Math.max(0, progress.totalGoldEarned || progress.gold || 0) + quest.goldReward,
+    totalQuestCompletions: Math.max(0, progress.totalQuestCompletions || 0) + 1,
+    questCompletedWeekdays: [...new Set([...normalizeNumberList(progress.questCompletedWeekdays, 0, 6), completedWeekday])].sort((a, b) => a - b),
     stats: {
       ...currentStats,
       [quest.stat]: currentStats[quest.stat] + 1,
@@ -883,6 +1299,7 @@ function completeQuest(questId, sourceElement) {
         goldReward: quest.goldReward,
         completedAt: completedAtIso,
         dateKey: getDateKey(completedAt),
+        completedHour,
       },
       ...progress.activityLog,
     ].slice(0, 50),
@@ -900,6 +1317,7 @@ function completeQuest(questId, sourceElement) {
   queueXpChangeAnimation(getLevel(progress.xp) > previousLevel ? 0 : previousLevelProgress);
   showRewardFeedback(quest);
   showFloatingReward(quest, sourceRect);
+  checkAchievements();
   showClearFeedback();
 
   if (getLevel(progress.xp) > previousLevel) {
@@ -909,6 +1327,51 @@ function completeQuest(questId, sourceElement) {
   if (shouldPlayEvolution) {
     playEvolutionAnimation();
   }
+}
+
+function closeCompleteConfirm() {
+  const dialog = document.querySelector("[data-complete-confirm]");
+  if (dialog) {
+    dialog.hidden = true;
+  }
+  pendingCompleteQuestId = "";
+  pendingCompleteSourceElement = null;
+}
+
+function openCompleteConfirm(questId, sourceElement) {
+  const quest = getAllQuests().find((item) => item.id === questId);
+  if (!quest || !isQuestVisible(quest) || isQuestCompleted(quest)) {
+    return;
+  }
+
+  const dialog = document.querySelector("[data-complete-confirm]");
+  const title = document.querySelector("[data-complete-confirm-title]");
+  if (!dialog) {
+    completeQuest(questId, sourceElement);
+    return;
+  }
+
+  pendingCompleteQuestId = questId;
+  pendingCompleteSourceElement = sourceElement;
+  if (title) {
+    title.textContent = `「${quest.title}」を達成しますか？`;
+  }
+  dialog.hidden = false;
+}
+
+function confirmCompleteQuest() {
+  const questId = pendingCompleteQuestId;
+  const sourceElement = pendingCompleteSourceElement;
+  closeCompleteConfirm();
+  if (!questId) {
+    return;
+  }
+
+  sourceElement?.classList.add("is-pressing");
+  window.setTimeout(() => {
+    sourceElement?.classList.remove("is-pressing");
+    completeQuest(questId, sourceElement);
+  }, 180);
 }
 
 function resetProgress() {
@@ -922,8 +1385,151 @@ function resetProgress() {
   }
 
   progress = { ...defaultProgress };
+  unlockedAchievements = [];
+  saveProgress();
+  saveAchievements();
+  render();
+}
+
+function setBackupMessage(message, isError = false) {
+  const element = document.querySelector("[data-backup-message]");
+  if (!element) {
+    return;
+  }
+
+  element.textContent = message;
+  element.classList.toggle("is-error", isError);
+}
+
+function createBackupData() {
+  const storage = {};
+  BACKUP_STORAGE_KEYS.forEach((key) => {
+    const value = localStorage.getItem(key);
+    if (value !== null) {
+      storage[key] = value;
+    }
+  });
+
+  return {
+    app: "sora-quest",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    storage,
+  };
+}
+
+function downloadBackup() {
+  if (!isParentUnlocked) {
+    showParentAuth();
+    return;
+  }
+
+  const backup = createBackupData();
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "guild-backup.json";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  setBackupMessage("バックアップを作成しました");
+}
+
+function normalizeBackupStorage(parsedBackup) {
+  const storage = parsedBackup?.storage && typeof parsedBackup.storage === "object" ? parsedBackup.storage : parsedBackup;
+  if (!storage || typeof storage !== "object" || Array.isArray(storage)) {
+    return null;
+  }
+
+  const normalizedStorage = {};
+  BACKUP_STORAGE_KEYS.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(storage, key)) {
+      const value = storage[key];
+      normalizedStorage[key] = typeof value === "string" ? value : JSON.stringify(value);
+    }
+  });
+
+  return Object.keys(normalizedStorage).length > 0 ? normalizedStorage : null;
+}
+
+function isValidBackupStorage(storage) {
+  return Object.values(storage).every((value) => {
+    try {
+      JSON.parse(value);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function restoreBackupFromText(text) {
+  let parsedBackup;
+  try {
+    parsedBackup = JSON.parse(text);
+  } catch {
+    setBackupMessage("バックアップファイルを読み込めませんでした", true);
+    return;
+  }
+
+  const storage = normalizeBackupStorage(parsedBackup);
+  if (!storage) {
+    setBackupMessage("そらクエストのバックアップではありません", true);
+    return;
+  }
+  if (!isValidBackupStorage(storage)) {
+    setBackupMessage("バックアップの中身が壊れている可能性があります", true);
+    return;
+  }
+
+  const confirmed = window.confirm("現在のデータをバックアップ内容で上書きします。よろしいですか？");
+  if (!confirmed) {
+    setBackupMessage("復元をキャンセルしました");
+    return;
+  }
+
+  Object.entries(storage).forEach(([key, value]) => {
+    localStorage.setItem(key, value);
+  });
+
+  progress = loadProgress();
+  managedQuests = loadManagedQuests();
+  rewards = loadRewards();
+  rewardHistory = loadRewardHistory();
+  unlockedAchievements = loadAchievements();
+  progress = reconcileProgressFromHistory(progress);
+  editingQuestId = null;
+  editingRewardId = null;
+  isQuestCreateOpen = false;
   saveProgress();
   render();
+  setBackupMessage("バックアップから復元しました");
+}
+
+function handleBackupFileChange(event) {
+  if (!isParentUnlocked) {
+    showParentAuth();
+    return;
+  }
+
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    restoreBackupFromText(String(reader.result || ""));
+    input.value = "";
+  });
+  reader.addEventListener("error", () => {
+    setBackupMessage("ファイルの読み込みに失敗しました", true);
+    input.value = "";
+  });
+  reader.readAsText(file);
 }
 
 function renderDevTools() {
@@ -988,6 +1594,7 @@ function switchScreen(screenId) {
     animateXpBarFrom(pendingXpAnimationStart);
     pendingXpAnimationStart = null;
   }
+  markScreenVisited(activeNavId);
 }
 
 function showParentAuth() {
@@ -1049,6 +1656,7 @@ function handleQuestCreateSubmit(event) {
   const quest = normalizeQuest({
     id: `parent-${Date.now()}`,
     type: formData.get("type"),
+    priority: formData.get("priority"),
     frequency: formData.get("frequency"),
     scheduleDays: formData.getAll("scheduleDays"),
     stat: formData.get("stat"),
@@ -1156,6 +1764,7 @@ function renderQuestManager() {
   managedQuests.forEach((quest) => {
     const item = document.createElement("article");
     const typeLabel = getQuestTypeLabel(quest.type);
+    const priorityLabel = getQuestPriorityLabel(quest.priority);
     item.className = `managed-quest-item managed-quest-${quest.type}`;
 
     if (quest.id === editingQuestId) {
@@ -1167,6 +1776,14 @@ function renderQuestManager() {
               <option value="normal"${quest.type === "normal" ? " selected" : ""}>通常クエスト</option>
               <option value="urgent"${quest.type === "urgent" ? " selected" : ""}>緊急クエスト</option>
               <option value="boss"${quest.type === "boss" ? " selected" : ""}>ボスクエスト</option>
+            </select>
+          </label>
+          <label>
+            優先度
+            <select name="priority">
+              <option value="high"${quest.priority === "high" ? " selected" : ""}>高</option>
+              <option value="medium"${quest.priority === "medium" ? " selected" : ""}>中</option>
+              <option value="low"${quest.priority === "low" ? " selected" : ""}>低</option>
             </select>
           </label>
           <label>
@@ -1220,6 +1837,7 @@ function renderQuestManager() {
             <h4>${escapeHtml(quest.title)}</h4>
             <div class="quest-title-badges">
               ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+              <span class="quest-priority-badge priority-${quest.priority}">${priorityLabel}</span>
               <span class="quest-frequency-badge">${getQuestFrequencyLabel(quest.frequency, quest.scheduleDays)}</span>
             </div>
           </div>
@@ -1258,6 +1876,7 @@ function handleQuestEditSubmit(event) {
   const quest = normalizeQuest({
     id: questId,
     type: formData.get("type"),
+    priority: formData.get("priority"),
     frequency: formData.get("frequency"),
     scheduleDays: formData.getAll("scheduleDays"),
     stat: formData.get("stat"),
@@ -1551,6 +2170,7 @@ function exchangeReward(rewardId) {
   saveProgress();
   saveRewardHistory();
   render();
+  checkAchievements();
   notifyRewardExchange(historyItem).then((notified) => {
     if (!notified) {
       window.alert("交換は完了しました。通知だけ失敗しました。");
@@ -1567,8 +2187,9 @@ function renderQuests() {
     const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
     const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
+    const priorityLabel = getQuestPriorityLabel(quest.priority);
     const card = document.createElement("article");
-    card.className = `quest-card quest-card-${quest.type}${completed ? " is-completed" : ""}`;
+    card.className = `quest-card quest-card-${quest.type} quest-card-priority-${quest.priority}${completed ? " is-completed" : ""}`;
     card.dataset.questCard = quest.id;
 
     card.innerHTML = `
@@ -1576,6 +2197,7 @@ function renderQuests() {
         <h3>${escapeHtml(quest.title)}</h3>
         <div class="quest-title-badges">
           ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+          <span class="quest-priority-badge priority-${quest.priority}">${priorityLabel}</span>
           <span class="quest-frequency-badge">${frequencyLabel}</span>
           ${completed ? '<span class="status-badge">完了済み</span>' : ""}
         </div>
@@ -1659,8 +2281,9 @@ function renderTodayQuests() {
     const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
     const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
+    const priorityLabel = getQuestPriorityLabel(quest.priority);
     const item = document.createElement("article");
-    item.className = `today-quest-item today-quest-${quest.type}${completed ? " is-completed" : ""}`;
+    item.className = `today-quest-item today-quest-${quest.type} today-priority-${quest.priority}${completed ? " is-completed" : ""}`;
 
     item.innerHTML = `
       <div>
@@ -1668,6 +2291,7 @@ function renderTodayQuests() {
           <h4>${escapeHtml(quest.title)}</h4>
           <div class="quest-title-badges">
             ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+            <span class="quest-priority-badge priority-${quest.priority}">${priorityLabel}</span>
             <span class="quest-frequency-badge">${frequencyLabel}</span>
           </div>
         </div>
@@ -1846,6 +2470,31 @@ function showRewardFeedback(quest) {
   rewardToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1200);
 }
 
+function playLoginBonusToast(message, duration = 1800) {
+  const toast = document.querySelector("[data-login-bonus-toast]");
+  if (!toast) {
+    return;
+  }
+
+  toast.textContent = message;
+  toast.classList.remove("is-visible");
+  void toast.offsetWidth;
+  toast.classList.add("is-visible");
+
+  window.clearTimeout(loginBonusTimer);
+  loginBonusTimer = window.setTimeout(() => toast.classList.remove("is-visible"), duration);
+}
+
+function showLoginBonusToast(loginBonusResult) {
+  playLoginBonusToast(`ログインボーナス！ Gold +${LOGIN_BONUS_GOLD}`);
+
+  if (loginBonusResult?.streakBonus) {
+    window.setTimeout(() => {
+      playLoginBonusToast(`7日連続ログイン達成！ Gold +${LOGIN_STREAK_BONUS_GOLD}`, 2000);
+    }, 1050);
+  }
+}
+
 function appendGainBadges(layer, quest) {
   layer.innerHTML = "";
 
@@ -1951,6 +2600,73 @@ function renderActivityLog() {
   });
 }
 
+function renderAchievements() {
+  const list = document.querySelector("[data-achievement-list]");
+  const count = document.querySelector("[data-achievement-count]");
+  if (!list) {
+    return;
+  }
+
+  const unlockedSet = new Set(unlockedAchievements);
+  const unlockedCount = ACHIEVEMENTS.filter((achievement) => unlockedSet.has(achievement.id)).length;
+  if (count) {
+    count.textContent = `${unlockedCount} / ${ACHIEVEMENTS.length}`;
+  }
+
+  list.innerHTML = "";
+  ACHIEVEMENTS.forEach((achievement) => {
+    const unlocked = unlockedSet.has(achievement.id);
+    const item = document.createElement("article");
+    item.className = `achievement-card${unlocked ? " is-unlocked" : ""}`;
+    item.innerHTML = `
+      <span class="achievement-icon" aria-hidden="true">${achievement.icon}</span>
+      <div>
+        <h4>${escapeHtml(achievement.name)}</h4>
+        <p>${escapeHtml(achievement.description)}</p>
+        <small>${escapeHtml(achievement.conditionText)}</small>
+      </div>
+    `;
+    list.append(item);
+  });
+}
+
+function renderRecentAchievements() {
+  const list = document.querySelector("[data-recent-achievement-list]");
+  if (!list) {
+    return;
+  }
+
+  list.innerHTML = "";
+  const achievementById = new Map(ACHIEVEMENTS.map((achievement) => [achievement.id, achievement]));
+  const recentAchievements = [...unlockedAchievements]
+    .reverse()
+    .map((id) => achievementById.get(id))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (recentAchievements.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "recent-achievement-empty";
+    empty.textContent = "まだ実績はありません";
+    list.append(empty);
+    return;
+  }
+
+  recentAchievements.forEach((achievement) => {
+    const item = document.createElement("article");
+    item.className = "recent-achievement-card";
+    item.innerHTML = `
+      <span class="recent-achievement-icon" aria-hidden="true">${achievement.icon}</span>
+      <div>
+        <h4>${escapeHtml(achievement.name)}</h4>
+        <p>${escapeHtml(achievement.description)}</p>
+      </div>
+      <strong>解除済み</strong>
+    `;
+    list.append(item);
+  });
+}
+
 function render() {
   applyDailyStreakReset();
   const level = getLevel(progress.xp);
@@ -1982,6 +2698,7 @@ function render() {
   setText("[data-gold]", progress.gold);
   setText("[data-streak-current]", `${progress.streak.current}日`);
   setText("[data-streak-best]", `${progress.streak.best}日`);
+  setText("[data-login-streak]", `${progress.loginStreak}日`);
   setText("[data-record-level]", level);
   setText("[data-record-xp]", progress.xp);
   setText("[data-record-gold]", progress.gold);
@@ -1995,6 +2712,8 @@ function render() {
   });
 
   renderGrowthRecord(level, title);
+  renderAchievements();
+  renderRecentAchievements();
   renderXpBar();
   renderCharacter(level);
   renderQuests();
@@ -2076,10 +2795,25 @@ document.addEventListener("click", (event) => {
 
   const completeButton = event.target.closest("[data-complete]");
   if (completeButton) {
-    completeButton.classList.add("is-pressing");
-    window.setTimeout(() => {
-      completeQuest(completeButton.dataset.complete, completeButton);
-    }, 180);
+    openCompleteConfirm(completeButton.dataset.complete, completeButton);
+    return;
+  }
+
+  const completeConfirmButton = event.target.closest("[data-complete-confirm-yes]");
+  if (completeConfirmButton) {
+    confirmCompleteQuest();
+    return;
+  }
+
+  const completeCancelButton = event.target.closest("[data-complete-confirm-cancel]");
+  if (completeCancelButton) {
+    closeCompleteConfirm();
+    return;
+  }
+
+  const completeConfirmBackdrop = event.target.closest("[data-complete-confirm]");
+  if (completeConfirmBackdrop && event.target === completeConfirmBackdrop) {
+    closeCompleteConfirm();
     return;
   }
 
@@ -2092,6 +2826,22 @@ document.addEventListener("click", (event) => {
   const parentModeExitButton = event.target.closest("[data-parent-mode-exit]");
   if (parentModeExitButton) {
     exitParentMode();
+    return;
+  }
+
+  const backupDownloadButton = event.target.closest("[data-backup-download]");
+  if (backupDownloadButton) {
+    downloadBackup();
+    return;
+  }
+
+  const backupImportButton = event.target.closest("[data-backup-import]");
+  if (backupImportButton) {
+    if (!isParentUnlocked) {
+      showParentAuth();
+      return;
+    }
+    document.querySelector("[data-backup-file]")?.click();
     return;
   }
 
@@ -2163,6 +2913,11 @@ document.addEventListener("click", (event) => {
 document.addEventListener("change", (event) => {
   if (event.target.matches('[name="frequency"]')) {
     updateWeekdayPicker(event.target.closest("form"));
+    return;
+  }
+
+  if (event.target.matches("[data-backup-file]")) {
+    handleBackupFileChange(event);
   }
 });
 
@@ -2173,4 +2928,19 @@ document.addEventListener("submit", handleQuestEditSubmit);
 document.addEventListener("submit", handleRewardEditSubmit);
 document.querySelector("[data-reset]").addEventListener("click", resetProgress);
 
+if (!progress.visitedScreens.includes("home")) {
+  progress = {
+    ...progress,
+    visitedScreens: [...progress.visitedScreens, "home"],
+  };
+  saveProgress();
+}
+const loginBonusResult = applyLoginBonus();
 render();
+if (loginBonusResult.granted) {
+  showLoginBonusToast(loginBonusResult);
+}
+const startupAchievements = checkAchievements({ showToast: false });
+if (startupAchievements.length > 0) {
+  window.setTimeout(() => showAchievementToast(startupAchievements), loginBonusResult.granted ? 2200 : 350);
+}

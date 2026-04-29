@@ -4,6 +4,8 @@ const LEGACY_CUSTOM_QUESTS_KEY = "sora_guild_app_custom_quests_dev";
 const REWARDS_KEY = "sora_guild_app_rewards_dev";
 const REWARD_HISTORY_KEY = "sora_guild_app_reward_history_dev";
 const ACHIEVEMENTS_KEY = "guildAchievements";
+const WEEKLY_REPORT_HISTORY_KEY = "sora_guild_app_weekly_report_history_dev";
+const PARENT_NOTES_KEY = "sora_guild_app_parent_notes_dev";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
 const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
@@ -19,6 +21,7 @@ const QUEST_PRIORITY_ORDER = {
   medium: 1,
   low: 2,
 };
+const QUEST_CATEGORY_ORDER = ["daily_required", "challenge"];
 const BACKUP_STORAGE_KEYS = [
   STORAGE_KEY,
   QUESTS_KEY,
@@ -26,6 +29,8 @@ const BACKUP_STORAGE_KEYS = [
   REWARDS_KEY,
   REWARD_HISTORY_KEY,
   ACHIEVEMENTS_KEY,
+  WEEKLY_REPORT_HISTORY_KEY,
+  PARENT_NOTES_KEY,
 ];
 
 const defaultProgress = {
@@ -58,6 +63,7 @@ const defaultQuests = [
   {
     id: "homework",
     type: "normal",
+    category: "daily_required",
     title: "宿題を終える",
     description: "今日の宿題を最後まで片づける。",
     frequency: "daily",
@@ -68,6 +74,7 @@ const defaultQuests = [
   {
     id: "reading",
     type: "normal",
+    category: "daily_required",
     title: "音読をする",
     description: "声に出して読み、聞いてもらう。",
     frequency: "daily",
@@ -78,6 +85,7 @@ const defaultQuests = [
   {
     id: "help",
     type: "normal",
+    category: "daily_required",
     title: "お手伝いをする",
     description: "家の中で一つ、誰かの助けになる。",
     frequency: "daily",
@@ -218,6 +226,7 @@ let managedQuests = loadManagedQuests();
 let rewards = loadRewards();
 let rewardHistory = loadRewardHistory();
 let unlockedAchievements = loadAchievements();
+let weeklyReportHistory = loadWeeklyReportHistory();
 progress = reconcileProgressFromHistory(progress);
 let rewardToastTimer;
 let clearToastTimer;
@@ -226,6 +235,7 @@ let evolutionTimer;
 let xpChangeTimer;
 let questCompleteTimer;
 let loginBonusTimer;
+let appReminderTimer;
 let achievementToastTimer;
 let pendingCompleteQuestId = "";
 let pendingCompleteSourceElement = null;
@@ -237,6 +247,12 @@ let isParentMode = false;
 let editingQuestId = null;
 let editingRewardId = null;
 let isQuestCreateOpen = false;
+let activeQuestCategory = "daily_required";
+let questSwipeStartX = 0;
+let questSwipeStartY = 0;
+let growthChartMode = "xp";
+let previousDailyRequiredComplete = false;
+let hasRenderedQuestCategoryProgress = false;
 
 function getDefaultProgressState() {
   return {
@@ -327,6 +343,79 @@ function loadAchievements() {
 
 function saveAchievements() {
   localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(unlockedAchievements));
+}
+
+function loadParentNotes() {
+  try {
+    const stored = localStorage.getItem(PARENT_NOTES_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([dateKey, note]) => [dateKey, String(note || "").trim()])
+        .filter(([dateKey, note]) => dateKey && note),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function saveParentNote(dateKey, note) {
+  const notes = loadParentNotes();
+  const normalizedNote = String(note || "").trim();
+  if (normalizedNote) {
+    notes[dateKey] = normalizedNote;
+  } else {
+    delete notes[dateKey];
+  }
+  localStorage.setItem(PARENT_NOTES_KEY, JSON.stringify(notes));
+}
+
+function getParentNote(dateKey = getDateKey()) {
+  return loadParentNotes()[dateKey] || "";
+}
+
+function normalizeWeeklyReportHistoryItem(rawItem) {
+  const weekStart = typeof rawItem.weekStart === "string" ? rawItem.weekStart : "";
+  if (!weekStart) {
+    return null;
+  }
+
+  const stats = normalizeStats(rawItem.stats);
+  const statTotal = Number.isFinite(rawItem.statTotal)
+    ? Math.max(0, Math.round(rawItem.statTotal))
+    : stats.STR + stats.INT + stats.END + stats.DEX;
+
+  return {
+    weekStart,
+    weekEnd: typeof rawItem.weekEnd === "string" ? rawItem.weekEnd : getWeekEndKey(weekStart),
+    completed: Number.isFinite(rawItem.completed) ? Math.max(0, Math.round(rawItem.completed)) : 0,
+    xp: Number.isFinite(rawItem.xp) ? Math.max(0, Math.round(rawItem.xp)) : 0,
+    gold: Number.isFinite(rawItem.gold) ? Math.max(0, Math.round(rawItem.gold)) : 0,
+    stats,
+    statTotal,
+    loginStreak: Number.isFinite(rawItem.loginStreak) ? Math.max(0, Math.round(rawItem.loginStreak)) : 0,
+    savedAt: typeof rawItem.savedAt === "string" ? rawItem.savedAt : new Date().toISOString(),
+  };
+}
+
+function loadWeeklyReportHistory() {
+  try {
+    const stored = localStorage.getItem(WEEKLY_REPORT_HISTORY_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map(normalizeWeeklyReportHistoryItem).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function saveWeeklyReportHistory() {
+  localStorage.setItem(WEEKLY_REPORT_HISTORY_KEY, JSON.stringify(weeklyReportHistory));
 }
 
 function reconcileProgressFromHistory(currentProgress) {
@@ -570,6 +659,7 @@ function normalizeQuest(rawQuest) {
   const goldReward = Number(rawQuest.goldReward);
   const title = String(rawQuest.title || "").trim();
   const type = ["normal", "urgent", "boss"].includes(rawQuest.type) ? rawQuest.type : "normal";
+  const category = ["daily_required", "challenge"].includes(rawQuest.category) ? rawQuest.category : "daily_required";
   const priority = ["high", "medium", "low"].includes(rawQuest.priority) ? rawQuest.priority : "medium";
   const frequency = ["once", "daily", "weekly", "weekday"].includes(rawQuest.frequency) ? rawQuest.frequency : "daily";
   const stat = ["STR", "INT", "END", "DEX"].includes(rawQuest.stat) ? rawQuest.stat : inferQuestStat(rawQuest);
@@ -583,6 +673,7 @@ function normalizeQuest(rawQuest) {
     id: String(rawQuest.id || `parent-${Date.now()}`),
     title,
     type,
+    category,
     priority,
     frequency,
     scheduleDays,
@@ -914,6 +1005,43 @@ function getVisibleQuests() {
   return sortQuestsForDisplay(getAllQuests().filter(isQuestVisible));
 }
 
+function getVisibleQuestsByCategory(category) {
+  return sortQuestsForDisplay(getAllQuests().filter((quest) => isQuestVisible(quest) && quest.category === category));
+}
+
+function getDailyRequiredQuestSummary() {
+  const quests = getVisibleQuestsByCategory("daily_required");
+  const completedCount = quests.filter(isQuestCompleted).length;
+  const totalCount = quests.length;
+  return {
+    completedCount,
+    totalCount,
+    remainingCount: Math.max(0, totalCount - completedCount),
+    progressPercent: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
+    isComplete: totalCount > 0 && completedCount === totalCount,
+  };
+}
+
+function getQuestCategoryLabel(category) {
+  if (category === "challenge") {
+    return "追加依頼";
+  }
+  return "毎日クエスト";
+}
+
+function getQuestCategoryFlavor(category) {
+  if (category === "challenge") {
+    return {
+      kicker: "追加依頼",
+      empty: "今できるチャレンジ依頼はありません。",
+    };
+  }
+  return {
+    kicker: "今日の任務",
+    empty: "今日の毎日クエストはありません。",
+  };
+}
+
 function getQuestTypeLabel(type) {
   if (type === "urgent") {
     return "緊急";
@@ -1144,6 +1272,38 @@ function formatWeeklyStatGrowth(stats) {
   }
 
   return entries.map((item) => `${getStatLabel(item.stat)} +${item.value}`).join(" / ");
+}
+
+function createWeeklyReportHistoryItem(report) {
+  const weekStart = getWeekKey();
+  const stats = normalizeStats(report.stats);
+  return {
+    weekStart,
+    weekEnd: getWeekEndKey(weekStart),
+    completed: report.completed,
+    xp: report.xp,
+    gold: report.gold,
+    stats,
+    statTotal: stats.STR + stats.INT + stats.END + stats.DEX,
+    loginStreak: progress.loginStreak || 0,
+    savedAt: new Date().toISOString(),
+  };
+}
+
+function updateWeeklyReportHistory(report) {
+  const item = createWeeklyReportHistoryItem(report);
+  const hasRecord = item.completed > 0 || item.xp > 0 || item.gold > 0 || item.statTotal > 0;
+  if (!hasRecord) {
+    return;
+  }
+
+  weeklyReportHistory = [
+    item,
+    ...weeklyReportHistory.filter((historyItem) => historyItem.weekStart !== item.weekStart),
+  ]
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+    .slice(-12);
+  saveWeeklyReportHistory();
 }
 
 function getEstimatedQuestCountToLevel(xp) {
@@ -1520,6 +1680,91 @@ function completeQuest(questId, sourceElement) {
   }
 }
 
+function recalculateStreakFromActivityLog(activityLog, previousBest = 0) {
+  const completedDates = [...new Set(activityLog.map((item) => item.dateKey).filter(Boolean))].sort();
+  const latestDate = completedDates[completedDates.length - 1] || "";
+  if (!latestDate || getDayDifference(latestDate, getDateKey()) > 1) {
+    return {
+      current: 0,
+      best: Math.max(0, previousBest),
+      lastCompletedDate: latestDate,
+    };
+  }
+
+  let current = 1;
+  for (let index = completedDates.length - 2; index >= 0; index -= 1) {
+    if (getDayDifference(completedDates[index], completedDates[index + 1]) !== 1) {
+      break;
+    }
+    current += 1;
+  }
+
+  return {
+    current,
+    best: Math.max(previousBest || 0, current),
+    lastCompletedDate: latestDate,
+  };
+}
+
+function removeQuestActivityLogItem(activityLog, quest) {
+  const index = activityLog.findIndex(
+    (item) =>
+      item.questTitle === quest.title &&
+      item.xpReward === quest.xpReward &&
+      item.goldReward === quest.goldReward &&
+      item.stat === quest.stat,
+  );
+
+  if (index < 0) {
+    return activityLog;
+  }
+
+  return activityLog.filter((_, itemIndex) => itemIndex !== index);
+}
+
+function undoQuestCompletion(questId) {
+  if (!isParentMode) {
+    showParentAuth();
+    return;
+  }
+
+  const quest = getAllQuests().find((item) => item.id === questId);
+  if (!quest || !isQuestCompleted(quest)) {
+    return;
+  }
+
+  const confirmed = window.confirm("このクエストを未完了に戻しますか？");
+  if (!confirmed) {
+    return;
+  }
+
+  const completionKey = getQuestCompletionKey(quest);
+  const currentStats = normalizeStats(progress.stats);
+  const nextActivityLog = removeQuestActivityLogItem(progress.activityLog, quest);
+  const nextWeekdays = [...new Set(nextActivityLog.map((item) => item.dateKey ? getJapanDayOfWeek(new Date(`${item.dateKey}T00:00:00+09:00`)) : null))]
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    .sort((a, b) => a - b);
+
+  progress = {
+    ...progress,
+    xp: Math.max(0, progress.xp - quest.xpReward),
+    gold: Math.max(0, progress.gold - quest.goldReward),
+    totalGoldEarned: Math.max(0, (progress.totalGoldEarned || 0) - quest.goldReward),
+    totalQuestCompletions: Math.max(0, (progress.totalQuestCompletions || 0) - 1),
+    questCompletedWeekdays: nextWeekdays,
+    stats: {
+      ...currentStats,
+      [quest.stat]: Math.max(0, currentStats[quest.stat] - 1),
+    },
+    completedQuestIds: progress.completedQuestIds.filter((id) => id !== completionKey),
+    activityLog: nextActivityLog,
+    streak: recalculateStreakFromActivityLog(nextActivityLog, progress.streak?.best || 0),
+  };
+
+  saveProgress();
+  render();
+}
+
 function closeCompleteConfirm() {
   const dialog = document.querySelector("[data-complete-confirm]");
   if (dialog) {
@@ -1673,6 +1918,7 @@ function restoreBackupFromText(text) {
   rewards = loadRewards();
   rewardHistory = loadRewardHistory();
   unlockedAchievements = loadAchievements();
+  weeklyReportHistory = loadWeeklyReportHistory();
   progress = reconcileProgressFromHistory(progress);
   editingQuestId = null;
   editingRewardId = null;
@@ -1773,11 +2019,13 @@ function applyResetTarget(target) {
     rewards = [];
     rewardHistory = [];
     unlockedAchievements = [];
+    weeklyReportHistory = [];
     saveProgress();
     saveManagedQuests();
     saveRewards();
     saveRewardHistory();
     saveAchievements();
+    saveWeeklyReportHistory();
   }
 }
 
@@ -1934,6 +2182,7 @@ function handleQuestCreateSubmit(event) {
   const quest = normalizeQuest({
     id: `parent-${Date.now()}`,
     type: formData.get("type"),
+    category: formData.get("category"),
     priority: formData.get("priority"),
     frequency: formData.get("frequency"),
     scheduleDays: formData.getAll("scheduleDays"),
@@ -1967,6 +2216,37 @@ function handleQuestCreateSubmit(event) {
     message.textContent = "クエストを追加しました";
   }
   render();
+}
+
+function handleParentNoteSubmit(event) {
+  event.preventDefault();
+  if (!isParentMode) {
+    showParentAuth();
+    return;
+  }
+
+  const form = event.currentTarget;
+  const input = form.querySelector("[data-parent-note-input]");
+  const message = form.querySelector("[data-parent-note-message]");
+  saveParentNote(getDateKey(), input?.value || "");
+  renderParentNote();
+  if (message) {
+    message.textContent = "今日のひとことを保存しました";
+  }
+}
+
+function clearParentNote() {
+  if (!isParentMode) {
+    showParentAuth();
+    return;
+  }
+
+  saveParentNote(getDateKey(), "");
+  renderParentNote();
+  const message = document.querySelector("[data-parent-note-message]");
+  if (message) {
+    message.textContent = "今日のひとことを削除しました";
+  }
 }
 
 function renderWeekdayPicker(selectedDays = [], hidden = true) {
@@ -2043,7 +2323,7 @@ function renderQuestManager() {
     const item = document.createElement("article");
     const typeLabel = getQuestTypeLabel(quest.type);
     const priorityLabel = getQuestPriorityLabel(quest.priority);
-    item.className = `managed-quest-item managed-quest-${quest.type}`;
+    item.className = `managed-quest-item managed-quest-${quest.type} managed-quest-category-${quest.category}`;
 
     if (quest.id === editingQuestId) {
       item.innerHTML = `
@@ -2054,6 +2334,13 @@ function renderQuestManager() {
               <option value="normal"${quest.type === "normal" ? " selected" : ""}>通常クエスト</option>
               <option value="urgent"${quest.type === "urgent" ? " selected" : ""}>緊急クエスト</option>
               <option value="boss"${quest.type === "boss" ? " selected" : ""}>ボスクエスト</option>
+            </select>
+          </label>
+          <label>
+            クエスト分類
+            <select name="category">
+              <option value="daily_required"${quest.category === "daily_required" ? " selected" : ""}>毎日クエスト</option>
+              <option value="challenge"${quest.category === "challenge" ? " selected" : ""}>チャレンジクエスト</option>
             </select>
           </label>
           <label>
@@ -2115,6 +2402,7 @@ function renderQuestManager() {
             <h4>${escapeHtml(quest.title)}</h4>
             <div class="quest-title-badges">
               ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+              <span class="quest-category-badge quest-category-${quest.category}">${getQuestCategoryLabel(quest.category)}</span>
               <span class="quest-priority-badge priority-${quest.priority}">${priorityLabel}</span>
               <span class="quest-frequency-badge">${getQuestFrequencyLabel(quest.frequency, quest.scheduleDays)}</span>
             </div>
@@ -2154,6 +2442,7 @@ function handleQuestEditSubmit(event) {
   const quest = normalizeQuest({
     id: questId,
     type: formData.get("type"),
+    category: formData.get("category"),
     priority: formData.get("priority"),
     frequency: formData.get("frequency"),
     scheduleDays: formData.getAll("scheduleDays"),
@@ -2460,14 +2749,86 @@ function exchangeReward(rewardId) {
 function renderQuests() {
   const list = document.querySelector("[data-quest-list]");
   list.innerHTML = "";
+  const category = QUEST_CATEGORY_ORDER.includes(activeQuestCategory) ? activeQuestCategory : "daily_required";
+  const visibleQuests = getVisibleQuestsByCategory(category);
+  const categoryFlavor = getQuestCategoryFlavor(category);
 
-  getVisibleQuests().forEach((quest) => {
+  document.querySelectorAll("[data-quest-category-tab]").forEach((tab) => {
+    const isActive = tab.dataset.questCategoryTab === category;
+    tab.classList.toggle("is-active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  });
+
+  QUEST_CATEGORY_ORDER.forEach((questCategory) => {
+    const categoryQuests = getVisibleQuestsByCategory(questCategory);
+    const completedCount = categoryQuests.filter(isQuestCompleted).length;
+    const totalCount = categoryQuests.length;
+    const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+    const summary = document.querySelector(`[data-quest-category-summary="${questCategory}"]`);
+    const count = document.querySelector(`[data-quest-category-count="${questCategory}"]`);
+    const bar = document.querySelector(`[data-quest-category-bar="${questCategory}"]`);
+    const message = document.querySelector(`[data-quest-category-message="${questCategory}"]`);
+    const isComplete = totalCount > 0 && completedCount === totalCount;
+
+    if (summary) {
+      summary.classList.toggle("is-active", questCategory === category);
+      summary.classList.toggle("is-complete", isComplete);
+      if (
+        questCategory === "daily_required" &&
+        isComplete &&
+        !previousDailyRequiredComplete &&
+        hasRenderedQuestCategoryProgress
+      ) {
+        summary.classList.remove("is-daily-clear");
+        void summary.offsetWidth;
+        summary.classList.add("is-daily-clear");
+      }
+    }
+    if (count) {
+      count.textContent = `${completedCount} / ${totalCount}`;
+    }
+    if (bar) {
+      bar.style.width = `${progressPercent}%`;
+    }
+    if (message) {
+      if (questCategory === "daily_required") {
+        if (totalCount === 0) {
+          message.textContent = "今日の毎日クエストはありません。";
+        } else if (isComplete) {
+          message.textContent = "今日の分、達成！";
+        } else {
+          message.textContent = `あと${totalCount - completedCount}件で今日の分が完了です。`;
+        }
+      } else if (totalCount === 0) {
+        message.textContent = "今できる追加依頼はありません。";
+      } else if (isComplete) {
+        message.textContent = "追加依頼も達成しました。";
+      } else {
+        message.textContent = "できたら挑戦の追加依頼です。";
+      }
+    }
+
+    if (questCategory === "daily_required") {
+      previousDailyRequiredComplete = isComplete;
+    }
+  });
+  hasRenderedQuestCategoryProgress = true;
+
+  if (visibleQuests.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "quest-empty";
+    empty.textContent = categoryFlavor.empty;
+    list.append(empty);
+    return;
+  }
+
+  visibleQuests.forEach((quest) => {
     const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
     const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
     const priorityLabel = getQuestPriorityLabel(quest.priority);
     const card = document.createElement("article");
-    card.className = `quest-card quest-card-${quest.type} quest-card-priority-${quest.priority}${completed ? " is-completed" : ""}`;
+    card.className = `quest-card quest-card-${quest.type} quest-card-category-${quest.category} quest-card-priority-${quest.priority}${completed ? " is-completed" : ""}`;
     card.dataset.questCard = quest.id;
 
     card.innerHTML = `
@@ -2475,6 +2836,8 @@ function renderQuests() {
         <h3>${escapeHtml(quest.title)}</h3>
         <div class="quest-title-badges">
           ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+          <span class="quest-category-badge quest-category-${quest.category}">${categoryFlavor.kicker}</span>
+          ${quest.category === "challenge" ? '<span class="quest-bonus-badge">ボーナス</span>' : ""}
           <span class="quest-priority-badge priority-${quest.priority}">${priorityLabel}</span>
           <span class="quest-frequency-badge">${frequencyLabel}</span>
           ${completed ? '<span class="status-badge">完了済み</span>' : ""}
@@ -2489,10 +2852,111 @@ function renderQuests() {
       <button class="complete-button" type="button" data-complete="${quest.id}" ${completed ? "disabled" : ""}>
         ${completed ? "達成済み" : "完了"}
       </button>
+      ${
+        completed && isParentMode
+          ? `<button class="undo-complete-button" type="button" data-undo-complete="${escapeHtml(quest.id)}">未完了に戻す</button>`
+          : ""
+      }
     `;
 
     list.append(card);
   });
+}
+
+function switchQuestCategory(category) {
+  if (!QUEST_CATEGORY_ORDER.includes(category) || activeQuestCategory === category) {
+    return;
+  }
+
+  activeQuestCategory = category;
+  renderQuests();
+}
+
+function switchQuestCategoryByDirection(direction) {
+  const currentIndex = QUEST_CATEGORY_ORDER.indexOf(activeQuestCategory);
+  const nextIndex = Math.min(Math.max(currentIndex + direction, 0), QUEST_CATEGORY_ORDER.length - 1);
+  switchQuestCategory(QUEST_CATEGORY_ORDER[nextIndex]);
+}
+
+function renderHomeDailyMission() {
+  const card = document.querySelector("[data-home-daily-mission]");
+  if (!card) {
+    return;
+  }
+
+  const { completedCount, totalCount, remainingCount, progressPercent, isComplete } = getDailyRequiredQuestSummary();
+  const count = document.querySelector("[data-home-daily-count]");
+  const bar = document.querySelector("[data-home-daily-bar]");
+  const message = document.querySelector("[data-home-daily-message]");
+
+  if (count) {
+    count.textContent = `${completedCount} / ${totalCount}`;
+  }
+  if (bar) {
+    bar.style.width = `${progressPercent}%`;
+  }
+  if (message) {
+    if (totalCount === 0) {
+      message.textContent = "今日の毎日クエストはありません。";
+    } else if (isComplete) {
+      message.textContent = "今日の分、達成！";
+    } else {
+      message.textContent = `あと${remainingCount}件で今日の任務が完了です。`;
+    }
+  }
+
+  card.classList.toggle("is-complete", isComplete);
+  card.classList.toggle("is-empty", totalCount === 0);
+}
+
+function renderAppReminder() {
+  const summary = getDailyRequiredQuestSummary();
+  const reminder = document.querySelector("[data-home-reminder]");
+  const reminderText = document.querySelector("[data-home-reminder-text]");
+  const badge = document.querySelector("[data-quest-nav-badge]");
+
+  if (reminderText) {
+    if (summary.totalCount === 0) {
+      reminderText.textContent = "今日の任務はありません。";
+    } else if (summary.isComplete) {
+      reminderText.textContent = "今日の分、達成！";
+    } else {
+      reminderText.textContent = "今日の任務がまだ残っています";
+    }
+  }
+  if (reminder) {
+    reminder.classList.toggle("is-complete", summary.isComplete);
+    reminder.classList.toggle("is-empty", summary.totalCount === 0);
+  }
+  if (badge) {
+    badge.hidden = summary.remainingCount === 0;
+    badge.textContent = String(summary.remainingCount);
+    badge.setAttribute("aria-label", `毎日クエスト未完了 ${summary.remainingCount}件`);
+  }
+}
+
+function renderParentNote() {
+  const todayKey = getDateKey();
+  const note = getParentNote(todayKey);
+  const text = document.querySelector("[data-parent-note-text]");
+  const input = document.querySelector("[data-parent-note-input]");
+  const date = document.querySelector("[data-parent-note-date]");
+  const message = document.querySelector("[data-parent-note-message]");
+
+  if (text) {
+    text.textContent = note || "今日のひとことはまだありません";
+    text.classList.toggle("is-empty", !note);
+  }
+  if (input && input.value !== note) {
+    input.value = note;
+  }
+  if (date) {
+    date.textContent = todayKey;
+  }
+  if (message) {
+    message.textContent = "";
+    message.classList.remove("is-error");
+  }
 }
 
 function playQuestCompleteAnimation(questId) {
@@ -2739,13 +3203,19 @@ function showRewardFeedback(quest) {
     return;
   }
 
-  toast.textContent = `クエスト達成！ XP +${quest.xpReward} / Gold +${quest.goldReward}`;
+  toast.textContent =
+    quest.category === "challenge"
+      ? `追加依頼達成！ ボーナス獲得！ XP +${quest.xpReward} / Gold +${quest.goldReward}`
+      : `クエスト達成！ XP +${quest.xpReward} / Gold +${quest.goldReward}`;
+  toast.classList.toggle("is-challenge", quest.category === "challenge");
   toast.classList.remove("is-visible");
   void toast.offsetWidth;
   toast.classList.add("is-visible");
 
   window.clearTimeout(rewardToastTimer);
-  rewardToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1200);
+  rewardToastTimer = window.setTimeout(() => {
+    toast.classList.remove("is-visible", "is-challenge");
+  }, 1300);
 }
 
 function playLoginBonusToast(message, duration = 1800) {
@@ -2761,6 +3231,26 @@ function playLoginBonusToast(message, duration = 1800) {
 
   window.clearTimeout(loginBonusTimer);
   loginBonusTimer = window.setTimeout(() => toast.classList.remove("is-visible"), duration);
+}
+
+function showAppReminderToast() {
+  const toast = document.querySelector("[data-app-reminder-toast]");
+  if (!toast || isParentMode) {
+    return;
+  }
+
+  const summary = getDailyRequiredQuestSummary();
+  if (summary.remainingCount <= 0) {
+    return;
+  }
+
+  toast.textContent = `今日の任務が${summary.remainingCount}つ残っています`;
+  toast.classList.remove("is-visible");
+  void toast.offsetWidth;
+  toast.classList.add("is-visible");
+
+  window.clearTimeout(appReminderTimer);
+  appReminderTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
 }
 
 function showLoginBonusToast(loginBonusResult) {
@@ -2830,6 +3320,7 @@ function showClearFeedback() {
 function renderGrowthRecord(level, title) {
   const todayGrowth = getTodayGrowth();
   const weeklyReport = getWeeklyReport();
+  updateWeeklyReportHistory(weeklyReport);
   const xpToNext = getXpToNextLevel(progress.xp);
   const estimatedCount = getEstimatedQuestCountToLevel(progress.xp);
   const subTitle = getSubTitle(progress.stats);
@@ -2853,6 +3344,7 @@ function renderGrowthRecord(level, title) {
   setText("[data-current-title-record]", title.name);
   setText("[data-previous-title-record]", getPreviousTitleForRecord(level));
   setText("[data-record-sub-title]", subTitle.name);
+  renderGrowthChart();
   renderActivityLog();
 }
 
@@ -2886,6 +3378,89 @@ function renderActivityLog() {
     `;
     list.append(item);
   });
+}
+
+function getGrowthChartValue(item, mode) {
+  if (mode === "gold") {
+    return item.gold;
+  }
+  if (mode === "stat") {
+    return item.statTotal;
+  }
+  return item.xp;
+}
+
+function getGrowthChartLabel(mode) {
+  if (mode === "gold") {
+    return "Goldの推移";
+  }
+  if (mode === "stat") {
+    return "ステータス合計の推移";
+  }
+  return "XPの推移";
+}
+
+function renderGrowthChart() {
+  const svg = document.querySelector("[data-growth-chart-svg]");
+  const frame = document.querySelector("[data-growth-chart-frame]");
+  const empty = document.querySelector("[data-growth-chart-empty]");
+  const label = document.querySelector("[data-growth-chart-label]");
+  const latest = document.querySelector("[data-growth-chart-latest]");
+  if (!svg || !frame || !empty) {
+    return;
+  }
+
+  const points = weeklyReportHistory
+    .map(normalizeWeeklyReportHistoryItem)
+    .filter(Boolean)
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+    .slice(-8);
+
+  document.querySelectorAll("[data-growth-chart-mode]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.growthChartMode === growthChartMode);
+  });
+
+  if (points.length < 2) {
+    frame.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+
+  const values = points.map((item) => getGrowthChartValue(item, growthChartMode));
+  const maxValue = Math.max(...values, 1);
+  const width = 320;
+  const height = 160;
+  const paddingX = 22;
+  const paddingY = 18;
+  const chartWidth = width - paddingX * 2;
+  const chartHeight = height - paddingY * 2;
+  const coordinates = values.map((value, index) => {
+    const x = paddingX + (chartWidth * index) / Math.max(points.length - 1, 1);
+    const y = height - paddingY - (chartHeight * value) / maxValue;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const circles = coordinates
+    .map((coordinate) => {
+      const [x, y] = coordinate.split(",");
+      return `<circle cx="${x}" cy="${y}" r="3.8"></circle>`;
+    })
+    .join("");
+
+  svg.innerHTML = `
+    <line class="chart-axis" x1="${paddingX}" y1="${height - paddingY}" x2="${width - paddingX}" y2="${height - paddingY}"></line>
+    <line class="chart-axis" x1="${paddingX}" y1="${paddingY}" x2="${paddingX}" y2="${height - paddingY}"></line>
+    <polyline class="chart-line-shadow" points="${coordinates.join(" ")}"></polyline>
+    <polyline class="chart-line" points="${coordinates.join(" ")}"></polyline>
+    <g class="chart-points">${circles}</g>
+  `;
+  frame.hidden = false;
+  empty.hidden = true;
+  if (label) {
+    label.textContent = getGrowthChartLabel(growthChartMode);
+  }
+  if (latest) {
+    latest.textContent = values[values.length - 1];
+  }
 }
 
 function renderAchievements() {
@@ -3005,6 +3580,9 @@ function render() {
   renderXpBar();
   renderCharacter(level);
   renderQuests();
+  renderHomeDailyMission();
+  renderAppReminder();
+  renderParentNote();
   renderTodayQuests();
   renderRewardShop();
   renderModeControls();
@@ -3087,6 +3665,12 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const undoCompleteButton = event.target.closest("[data-undo-complete]");
+  if (undoCompleteButton) {
+    undoQuestCompletion(undoCompleteButton.dataset.undoComplete);
+    return;
+  }
+
   const completeConfirmButton = event.target.closest("[data-complete-confirm-yes]");
   if (completeConfirmButton) {
     confirmCompleteQuest();
@@ -3114,6 +3698,12 @@ document.addEventListener("click", (event) => {
   const parentModeExitButton = event.target.closest("[data-parent-mode-exit]");
   if (parentModeExitButton) {
     exitParentMode();
+    return;
+  }
+
+  const parentNoteClearButton = event.target.closest("[data-parent-note-clear]");
+  if (parentNoteClearButton) {
+    clearParentNote();
     return;
   }
 
@@ -3150,6 +3740,19 @@ document.addEventListener("click", (event) => {
     sendWeeklyReport({ manual: true }).finally(() => {
       weeklyReportSendButton.disabled = false;
     });
+    return;
+  }
+
+  const growthChartModeButton = event.target.closest("[data-growth-chart-mode]");
+  if (growthChartModeButton) {
+    growthChartMode = growthChartModeButton.dataset.growthChartMode || "xp";
+    renderGrowthChart();
+    return;
+  }
+
+  const questCategoryButton = event.target.closest("[data-quest-category-tab]");
+  if (questCategoryButton) {
+    switchQuestCategory(questCategoryButton.dataset.questCategoryTab);
     return;
   }
 
@@ -3229,9 +3832,45 @@ document.addEventListener("change", (event) => {
   }
 });
 
+document.querySelector("[data-screen='quests']")?.addEventListener(
+  "touchstart",
+  (event) => {
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+    questSwipeStartX = touch.clientX;
+    questSwipeStartY = touch.clientY;
+  },
+  { passive: true },
+);
+
+document.querySelector("[data-screen='quests']")?.addEventListener(
+  "touchend",
+  (event) => {
+    const touch = event.changedTouches[0];
+    if (!touch || !questSwipeStartX) {
+      return;
+    }
+
+    const deltaX = touch.clientX - questSwipeStartX;
+    const deltaY = touch.clientY - questSwipeStartY;
+    questSwipeStartX = 0;
+    questSwipeStartY = 0;
+
+    if (Math.abs(deltaX) < 56 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+      return;
+    }
+
+    switchQuestCategoryByDirection(deltaX < 0 ? 1 : -1);
+  },
+  { passive: true },
+);
+
 document.querySelector("[data-parent-auth-form]")?.addEventListener("submit", handleParentAuthSubmit);
 document.querySelector("[data-quest-create-form]")?.addEventListener("submit", handleQuestCreateSubmit);
 document.querySelector("[data-reward-create-form]")?.addEventListener("submit", handleRewardCreateSubmit);
+document.querySelector("[data-parent-note-form]")?.addEventListener("submit", handleParentNoteSubmit);
 document.addEventListener("submit", handleQuestEditSubmit);
 document.addEventListener("submit", handleRewardEditSubmit);
 
@@ -3244,6 +3883,7 @@ if (!progress.visitedScreens.includes("home")) {
 }
 const loginBonusResult = applyLoginBonus();
 render();
+window.setTimeout(showAppReminderToast, loginBonusResult.granted ? 2100 : 450);
 if (loginBonusResult.granted) {
   showLoginBonusToast(loginBonusResult);
 }

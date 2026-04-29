@@ -78,6 +78,46 @@
             </div>
           </div>
 
+          <section class="daily-mission-card" data-home-daily-mission aria-labelledby="home-daily-mission-title">
+            <div class="daily-mission-head">
+              <div>
+                <p class="section-kicker">Mission</p>
+                <h3 id="home-daily-mission-title">今日の任務</h3>
+              </div>
+              <strong data-home-daily-count>0 / 0</strong>
+            </div>
+            <div class="daily-mission-track" aria-hidden="true">
+              <span data-home-daily-bar></span>
+            </div>
+            <p data-home-daily-message>今日やる分を確認しましょう。</p>
+          </section>
+
+          <div class="app-reminder-card" data-home-reminder>
+            <span data-home-reminder-text>今日の任務を確認しましょう。</span>
+          </div>
+
+          <section class="parent-note-card" aria-labelledby="parent-note-title">
+            <div class="parent-note-head">
+              <div>
+                <p class="section-kicker">Note</p>
+                <h3 id="parent-note-title">今日のひとこと</h3>
+              </div>
+              <span data-parent-note-date>今日</span>
+            </div>
+            <p class="parent-note-text" data-parent-note-text>今日のひとことはまだありません</p>
+            <form class="parent-note-form" data-parent-note-form data-parent-mode-only hidden>
+              <label>
+                親メモ
+                <textarea name="note" rows="3" maxlength="120" placeholder="例：今日は音読まで自分からできたね！" data-parent-note-input></textarea>
+              </label>
+              <div class="parent-note-actions">
+                <button class="quest-manage-button" type="submit">保存</button>
+                <button class="quest-manage-button is-secondary" type="button" data-parent-note-clear>削除</button>
+              </div>
+              <p class="form-message" data-parent-note-message aria-live="polite"></p>
+            </form>
+          </section>
+
           <section class="recent-achievements" aria-labelledby="recent-achievements-title">
             <div class="mini-section-heading">
               <p class="section-kicker">Badge</p>
@@ -110,6 +150,24 @@
           <div class="section-heading">
             <p class="section-kicker">Quest Board</p>
             <h2 id="quests-title">クエスト</h2>
+          </div>
+          <div class="quest-category-tabs" role="tablist" aria-label="クエストカテゴリ">
+            <button class="is-active" type="button" role="tab" aria-selected="true" data-quest-category-tab="daily_required">毎日クエスト</button>
+            <button type="button" role="tab" aria-selected="false" data-quest-category-tab="challenge">チャレンジ</button>
+          </div>
+          <div class="quest-category-progress" aria-label="クエストカテゴリ別の達成率">
+            <article data-quest-category-summary="daily_required">
+              <span>毎日クエスト</span>
+              <strong data-quest-category-count="daily_required">0 / 0</strong>
+              <div class="quest-category-track" aria-hidden="true"><i data-quest-category-bar="daily_required"></i></div>
+              <p data-quest-category-message="daily_required">今日やる分を進めましょう。</p>
+            </article>
+            <article data-quest-category-summary="challenge">
+              <span>チャレンジ</span>
+              <strong data-quest-category-count="challenge">0 / 0</strong>
+              <div class="quest-category-track" aria-hidden="true"><i data-quest-category-bar="challenge"></i></div>
+              <p data-quest-category-message="challenge">できたら挑戦の追加依頼です。</p>
+            </article>
           </div>
           <div class="quest-list" data-quest-list></div>
         </section>
@@ -222,6 +280,26 @@
             <div class="weekly-report-send" data-parent-mode-only hidden>
               <button class="quest-manage-button" type="button" data-weekly-report-send>週間レポートを送信</button>
               <p class="form-message weekly-send-message" data-weekly-send-message aria-live="polite"></p>
+            </div>
+          </section>
+
+          <section class="growth-panel growth-chart-panel" aria-labelledby="growth-chart-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Chart</p>
+              <h3 id="growth-chart-title">成長グラフ</h3>
+            </div>
+            <div class="chart-tabs" role="group" aria-label="成長グラフの切り替え">
+              <button class="is-active" type="button" data-growth-chart-mode="xp">XP</button>
+              <button type="button" data-growth-chart-mode="gold">Gold</button>
+              <button type="button" data-growth-chart-mode="stat">ステータス</button>
+            </div>
+            <p class="growth-chart-empty" data-growth-chart-empty>記録がたまるとグラフが表示されます</p>
+            <div class="growth-chart-frame" data-growth-chart-frame hidden>
+              <svg class="growth-chart-svg" viewBox="0 0 320 160" role="img" aria-label="成長の推移" data-growth-chart-svg></svg>
+              <div class="growth-chart-meta">
+                <span data-growth-chart-label>XPの推移</span>
+                <strong data-growth-chart-latest>0</strong>
+              </div>
             </div>
           </section>
 
@@ -349,6 +427,13 @@
               </select>
             </label>
             <label>
+              クエスト分類
+              <select name="category">
+                <option value="daily_required">毎日クエスト</option>
+                <option value="challenge">チャレンジクエスト</option>
+              </select>
+            </label>
+            <label>
               優先度
               <select name="priority">
                 <option value="high">高</option>
@@ -468,6 +553,7 @@
       </main>
 
       <div class="reward-toast" data-reward-toast aria-live="polite"></div>
+      <div class="app-reminder-toast" data-app-reminder-toast aria-live="polite"></div>
       <div class="login-bonus-toast" data-login-bonus-toast aria-live="polite"></div>
       <div class="achievement-toast" data-achievement-toast aria-live="polite"></div>
       <div class="clear-toast" data-clear-toast aria-live="polite"></div>
@@ -498,6 +584,7 @@
             <img class="nav-icon-image icon-quest" src="assets/icons/nav-quest.png" alt="" data-nav-icon-image>
             <span class="nav-icon-fallback">書</span>
           </span>
+          <span class="nav-badge" data-quest-nav-badge hidden>0</span>
           <span>クエスト</span>
         </button>
         <button class="nav-item" type="button" data-nav="growth" aria-controls="growth">

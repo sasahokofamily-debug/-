@@ -1,6 +1,7 @@
 const NOTIFY_EMAIL = "sasahokofamily@gmail.com";
 const WEEKLY_REPORT_SPREADSHEET_ID = "";
 const WEEKLY_REPORT_PROPERTY_KEY = "WEEKLY_REPORT_DATA";
+const WEEKLY_REPORT_LAST_SENT_WEEK_KEY = "WEEKLY_REPORT_LAST_SENT_WEEK";
 const WEEKLY_REPORT_HEADERS = [
   "保存日時",
   "週の開始日",
@@ -95,6 +96,20 @@ function saveWeeklyReport(data) {
 
   PropertiesService.getScriptProperties().setProperty(WEEKLY_REPORT_PROPERTY_KEY, JSON.stringify(report));
   saveWeeklyReportToSheet(report);
+}
+
+function sendWeeklyReport() {
+  const properties = PropertiesService.getScriptProperties();
+  const currentWeekId = getCurrentWeekId();
+  const lastSentWeek = properties.getProperty(WEEKLY_REPORT_LAST_SENT_WEEK_KEY);
+
+  if (lastSentWeek === currentWeekId) {
+    console.log(`週間レポートは送信済みです: ${currentWeekId}`);
+    return;
+  }
+
+  sendWeeklyReportEmail();
+  properties.setProperty(WEEKLY_REPORT_LAST_SENT_WEEK_KEY, currentWeekId);
 }
 
 function sendWeeklyReportEmail() {
@@ -238,6 +253,19 @@ function getCurrentWeekStartKey() {
   return Utilities.formatDate(japanDate, "UTC", "yyyy-MM-dd");
 }
 
+function getCurrentWeekId() {
+  const weekStartKey = getCurrentWeekStartKey();
+  const parts = weekStartKey.split("-").map(Number);
+  const weekStart = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  const thursday = new Date(weekStart);
+  thursday.setUTCDate(weekStart.getUTCDate() + 3);
+  const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
+  const firstWeekStart = new Date(firstThursday);
+  firstWeekStart.setUTCDate(firstThursday.getUTCDate() - ((firstThursday.getUTCDay() || 7) - 1));
+  const weekNumber = Math.floor((weekStart - firstWeekStart) / 604800000) + 1;
+  return `${thursday.getUTCFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+}
+
 function getWeekEndKey(weekStartKey) {
   const parts = String(weekStartKey).split("-").map(Number);
   if (parts.length !== 3 || parts.some(isNaN)) {
@@ -250,10 +278,10 @@ function getWeekEndKey(weekStartKey) {
 
 function setupWeeklyReportTrigger() {
   ScriptApp.getProjectTriggers()
-    .filter((trigger) => trigger.getHandlerFunction() === "sendWeeklyReportEmail")
+    .filter((trigger) => ["sendWeeklyReport", "sendWeeklyReportEmail"].includes(trigger.getHandlerFunction()))
     .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
 
-  ScriptApp.newTrigger("sendWeeklyReportEmail")
+  ScriptApp.newTrigger("sendWeeklyReport")
     .timeBased()
     .onWeekDay(ScriptApp.WeekDay.SUNDAY)
     .atHour(9)

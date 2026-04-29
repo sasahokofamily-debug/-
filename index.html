@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>そらクエスト</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Fantasy Guild Log</p>
+          <h1>そらクエスト</h1>
+        </div>
+        <button class="reset-button" type="button" data-reset>リセット</button>
+      </header>
+
+      <main class="screen-stack">
+        <section class="screen is-active" id="home" data-screen="home" aria-labelledby="home-title">
+          <div class="panel hero-panel">
+            <div class="character-frame">
+              <img class="character-image" data-character-image src="assets/character-sora.png" data-fallback-src="assets/character-sora.png" alt="冒険者の姿" hidden>
+              <div class="character-orb">
+                <span>剣</span>
+              </div>
+            </div>
+            <div class="adventurer-copy">
+              <p class="section-kicker">称号</p>
+              <h2 id="home-title" data-title-name>一歩目の見習い</h2>
+              <p class="daily-word" data-title-desc>はじめての挑戦をした</p>
+            </div>
+          </div>
+
+          <div class="xp-panel" data-level-panel>
+            <div class="xp-label-row">
+              <span data-xp-progress>Lv1 / 0XP進行中</span>
+              <strong data-xp-next>あと 100 XP</strong>
+            </div>
+            <div class="xp-track" aria-label="経験値の進捗">
+              <div class="xp-fill" data-xp-fill></div>
+            </div>
+            <div class="gain-float-layer" data-gain-float-layer aria-hidden="true"></div>
+          </div>
+
+          <div class="stat-grid">
+            <article class="stat-card">
+              <span>レベル</span>
+              <strong data-level>1</strong>
+            </article>
+            <article class="stat-card">
+              <span>経験値</span>
+              <strong><span data-xp>0</span><span class="stat-unit">XP</span></strong>
+            </article>
+            <article class="stat-card">
+              <span>ゴールド</span>
+              <strong><span data-gold>0</span><span class="stat-unit">G</span></strong>
+            </article>
+          </div>
+
+          <div class="streak-panel" aria-label="連続達成記録">
+            <div>
+              <span>連続達成</span>
+              <strong data-streak-current>0日</strong>
+            </div>
+            <div>
+              <span>最高記録</span>
+              <strong data-streak-best>0日</strong>
+            </div>
+          </div>
+
+          <section class="today-quests" aria-labelledby="today-quests-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Today</p>
+              <h3 id="today-quests-title">今日のクエスト</h3>
+            </div>
+            <div class="today-quest-list" data-today-quest-list></div>
+          </section>
+
+          <section class="reward-shop" aria-labelledby="reward-shop-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Reward</p>
+              <h3 id="reward-shop-title">ご褒美交換</h3>
+            </div>
+            <div class="reward-shop-list" data-reward-shop-list></div>
+          </section>
+        </section>
+
+        <section class="screen" id="quests" data-screen="quests" aria-labelledby="quests-title">
+          <div class="section-heading">
+            <p class="section-kicker">Quest Board</p>
+            <h2 id="quests-title">クエスト</h2>
+          </div>
+          <div class="quest-list" data-quest-list></div>
+        </section>
+
+        <section class="screen" id="growth" data-screen="growth" aria-labelledby="growth-title">
+          <div class="section-heading">
+            <p class="section-kicker">Record</p>
+            <h2 id="growth-title">成長記録</h2>
+          </div>
+          <div class="record-list">
+            <article class="record-row">
+              <span>現在レベル</span>
+              <strong data-record-level>1</strong>
+            </article>
+            <article class="record-row">
+              <span>累計経験値</span>
+              <strong><span data-record-xp>0</span><span class="record-unit">XP</span></strong>
+            </article>
+            <article class="record-row">
+              <span>累計ゴールド</span>
+              <strong><span data-record-gold>0</span><span class="record-unit">G</span></strong>
+            </article>
+            <article class="record-row">
+              <span>完了クエスト数</span>
+              <strong><span data-record-completed>0</span><span class="record-unit">件</span></strong>
+            </article>
+          </div>
+
+          <section class="growth-panel" aria-labelledby="today-growth-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Today</p>
+              <h3 id="today-growth-title">今日の成長</h3>
+            </div>
+            <div class="growth-summary-grid">
+              <article>
+                <span>達成</span>
+                <strong><span data-today-completed>0</span>件</strong>
+              </article>
+              <article>
+                <span>獲得XP</span>
+                <strong><span data-today-xp>0</span>XP</strong>
+              </article>
+              <article>
+                <span>獲得Gold</span>
+                <strong><span data-today-gold>0</span>G</strong>
+              </article>
+            </div>
+          </section>
+
+          <section class="growth-panel" aria-labelledby="growth-streak-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Streak</p>
+              <h3 id="growth-streak-title">連続達成</h3>
+            </div>
+            <div class="growth-summary-grid growth-summary-grid-two">
+              <article>
+                <span>現在</span>
+                <strong><span data-record-streak-current>0</span>日</strong>
+              </article>
+              <article>
+                <span>最高記録</span>
+                <strong><span data-record-streak-best>0</span>日</strong>
+              </article>
+            </div>
+          </section>
+
+          <section class="growth-panel" aria-labelledby="next-goal-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Next</p>
+              <h3 id="next-goal-title">次の目標</h3>
+            </div>
+            <div class="growth-goal">
+              <strong data-goal-xp>あと100XP</strong>
+              <span data-goal-count>あと3回くらいでレベルアップ</span>
+            </div>
+          </section>
+
+          <section class="growth-panel" aria-labelledby="activity-log-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Log</p>
+              <h3 id="activity-log-title">最近の活動ログ</h3>
+            </div>
+            <div class="activity-log-list" data-activity-log-list></div>
+          </section>
+
+          <section class="growth-panel" aria-labelledby="title-history-title">
+            <div class="mini-section-heading">
+              <p class="section-kicker">Title</p>
+              <h3 id="title-history-title">称号履歴</h3>
+            </div>
+            <div class="title-history-list">
+              <article>
+                <span>現在の称号</span>
+                <strong data-current-title-record>一歩目の見習い</strong>
+              </article>
+              <article>
+                <span>前の称号</span>
+                <strong data-previous-title-record>まだありません</strong>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="admin-auth" data-screen="admin-auth" aria-labelledby="admin-auth-title">
+          <div class="section-heading">
+            <p class="section-kicker">Parent Check</p>
+            <h2 id="admin-auth-title">保護者確認</h2>
+          </div>
+          <form class="panel parent-auth-panel" data-parent-auth-form>
+            <h3>ギルド管理を開く</h3>
+            <p>保護者用PINを入力してください。</p>
+            <label>
+              PIN
+              <input type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="1234" data-parent-pin>
+            </label>
+            <p class="auth-message" data-parent-auth-message aria-live="polite"></p>
+            <button class="auth-submit-button" type="submit">解除する</button>
+          </form>
+        </section>
+
+        <section class="screen" id="admin" data-screen="admin" aria-labelledby="admin-title">
+          <div class="section-heading">
+            <p class="section-kicker">Guild Master</p>
+            <h2 id="admin-title">ギルド管理</h2>
+          </div>
+          <div class="panel admin-panel">
+            <h3>保護者の方へ</h3>
+            <p>
+              宿題やお手伝いをクエストとして完了し、経験値とゴールドで日々の取り組みを記録する最小版です。
+              進行状況はこの端末のブラウザに保存されます。
+            </p>
+          </div>
+          <div class="dev-tools" data-dev-tools aria-label="開発確認用ツール" hidden>
+            <span>開発確認用</span>
+            <button class="dev-test-button" type="button" data-dev-level-up>Lv+1 テスト</button>
+          </div>
+          <form class="future-form quest-create-form" data-quest-create-form aria-label="クエスト追加フォーム">
+            <h3>クエスト追加</h3>
+            <label>
+              クエスト種別
+              <select name="type">
+                <option value="normal">通常クエスト</option>
+                <option value="urgent">緊急クエスト</option>
+                <option value="boss">ボスクエスト</option>
+              </select>
+            </label>
+            <label>
+              クエスト名
+              <input type="text" name="title" placeholder="例：明日の準備をする" required>
+            </label>
+            <label>
+              説明
+              <textarea name="description" rows="3" placeholder="例：時間割を見て、持ち物をそろえる。"></textarea>
+            </label>
+            <div class="reward-input-grid">
+              <label>
+                XP
+                <input type="number" name="xp" inputmode="numeric" min="1" max="999" placeholder="40" required>
+              </label>
+              <label>
+                Gold
+                <input type="number" name="gold" inputmode="numeric" min="1" max="999" placeholder="30" required>
+              </label>
+            </div>
+            <p class="form-message" data-quest-create-message aria-live="polite"></p>
+            <button type="submit">クエストを追加</button>
+          </form>
+          <section class="future-form quest-manage-panel" aria-labelledby="quest-manage-title">
+            <h3 id="quest-manage-title">追加済みクエスト</h3>
+            <div class="managed-quest-list" data-managed-quest-list></div>
+          </section>
+          <form class="future-form reward-create-form" data-reward-create-form aria-label="ご褒美追加フォーム">
+            <h3>ご褒美追加</h3>
+            <label>
+              ご褒美名
+              <input type="text" name="name" placeholder="例：ゲーム15分" required>
+            </label>
+            <label>
+              必要Gold
+              <input type="number" name="cost" inputmode="numeric" min="1" max="9999" placeholder="100" required>
+            </label>
+            <p class="form-message" data-reward-create-message aria-live="polite"></p>
+            <button type="submit">ご褒美を追加</button>
+          </form>
+          <section class="future-form reward-manage-panel" aria-labelledby="reward-manage-title">
+            <h3 id="reward-manage-title">ご褒美一覧</h3>
+            <div class="managed-reward-list" data-managed-reward-list></div>
+          </section>
+          <section class="future-form reward-history-panel" aria-labelledby="reward-history-title">
+            <h3 id="reward-history-title">交換履歴</h3>
+            <div class="reward-history-list" data-reward-history-list></div>
+          </section>
+        </section>
+      </main>
+
+      <div class="reward-toast" data-reward-toast aria-live="polite"></div>
+      <div class="clear-toast" data-clear-toast aria-live="polite"></div>
+      <div class="level-up-toast" data-level-up-toast aria-live="polite">レベルアップ！</div>
+      <div class="evolution-toast" data-evolution-toast aria-live="polite"></div>
+
+      <nav class="bottom-nav" aria-label="主要画面">
+        <button class="nav-item is-active" type="button" data-nav="home" aria-controls="home">
+          <span class="nav-icon">
+            <img class="nav-icon-image icon-home" src="assets/icons/icon-home.png" alt="" data-nav-icon-image>
+            <span class="nav-icon-fallback">館</span>
+          </span>
+          <span>冒険者の間</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="quests" aria-controls="quests">
+          <span class="nav-icon">
+            <img class="nav-icon-image icon-quest" src="assets/icons/icon-quest.png" alt="" data-nav-icon-image>
+            <span class="nav-icon-fallback">書</span>
+          </span>
+          <span>クエスト</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="growth" aria-controls="growth">
+          <span class="nav-icon">
+            <img class="nav-icon-image icon-status" src="assets/icons/icon-status.png" alt="" data-nav-icon-image>
+            <span class="nav-icon-fallback">星</span>
+          </span>
+          <span>成長記録</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="admin" aria-controls="admin">
+          <span class="nav-icon">
+            <img class="nav-icon-image icon-guild" src="assets/icons/icon-guild.png" alt="" data-nav-icon-image>
+            <span class="nav-icon-fallback">鍵</span>
+          </span>
+          <span>ギルド管理</span>
+        </button>
+      </nav>
+    </div>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

@@ -13,7 +13,11 @@
           <p class="eyebrow">Fantasy Guild Log</p>
           <h1>そらクエスト</h1>
         </div>
-        <button class="reset-button" type="button" data-reset>リセット</button>
+        <div class="parent-mode-tools" data-parent-mode-only hidden>
+          <span>ギルドマスター管理中</span>
+          <button class="parent-mode-exit" type="button" data-parent-mode-exit>解除</button>
+          <button class="reset-button" type="button" data-reset>リセット</button>
+        </div>
       </header>
 
       <main class="screen-stack">
@@ -226,8 +230,9 @@
             <span>開発確認用</span>
             <button class="dev-test-button" type="button" data-dev-level-up>Lv+1 テスト</button>
           </div>
-          <form class="future-form quest-create-form" data-quest-create-form aria-label="クエスト追加フォーム">
-            <h3>クエスト追加</h3>
+          <button class="quest-create-toggle" type="button" data-toggle-quest-create aria-expanded="false">新しいクエスト追加</button>
+          <form class="future-form quest-create-form" data-quest-create-form aria-label="クエスト追加フォーム" hidden>
+            <h3>新しいクエスト追加</h3>
             <label>
               クエスト種別
               <select name="type">
@@ -258,7 +263,7 @@
             <button type="submit">クエストを追加</button>
           </form>
           <section class="future-form quest-manage-panel" aria-labelledby="quest-manage-title">
-            <h3 id="quest-manage-title">追加済みクエスト</h3>
+            <h3 id="quest-manage-title">クエスト一覧</h3>
             <div class="managed-quest-list" data-managed-quest-list></div>
           </section>
           <form class="future-form reward-create-form" data-reward-create-form aria-label="ご褒美追加フォーム">

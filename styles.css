@@ -100,6 +100,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
   color: var(--cream);
@@ -145,7 +146,39 @@ h3 {
   font-size: 1.05rem;
 }
 
-.reset-button {
+.parent-mode-tools {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+.parent-mode-tools[hidden] {
+  display: none;
+}
+
+.parent-mode-tools span {
+  border: 1px solid rgba(241, 210, 122, 0.42);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #fff7df;
+  background: rgba(59, 33, 26, 0.68);
+  box-shadow: 0 8px 16px rgba(23, 12, 9, 0.18);
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.reset-button,
+.parent-mode-exit {
+  position: relative;
+  z-index: 31;
+  pointer-events: auto;
   min-height: 42px;
   padding: 9px 12px;
   border: 1px solid rgba(255, 247, 223, 0.42);
@@ -153,6 +186,11 @@ h3 {
   color: var(--cream);
   background: rgba(23, 42, 69, 0.72);
   box-shadow: 0 8px 16px rgba(23, 12, 9, 0.22);
+  font-weight: 900;
+}
+
+.parent-mode-exit {
+  background: rgba(111, 63, 38, 0.74);
 }
 
 .screen-stack {
@@ -1310,6 +1348,7 @@ h3 {
 }
 
 .complete-button,
+.quest-create-toggle,
 .future-form button {
   min-height: 46px;
   border: 0;
@@ -1325,6 +1364,11 @@ h3 {
     0 14px 22px rgba(59, 33, 26, 0.24);
   transform: translateY(0);
   transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+.quest-create-toggle {
+  width: 100%;
+  margin: 14px 0 10px;
 }
 
 .complete-button:active {

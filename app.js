@@ -1,8 +1,10 @@
 const STORAGE_KEY = "sora_guild_app_dev";
-const CUSTOM_QUESTS_KEY = "sora_guild_app_custom_quests_dev";
+const QUESTS_KEY = "sora_guild_app_quests_dev";
+const LEGACY_CUSTOM_QUESTS_KEY = "sora_guild_app_custom_quests_dev";
 const REWARDS_KEY = "sora_guild_app_rewards_dev";
 const REWARD_HISTORY_KEY = "sora_guild_app_reward_history_dev";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
+const isTestMode = false;
 const DEV_MODE = false;
 const PARENT_PIN = "1234";
 
@@ -20,7 +22,7 @@ const defaultProgress = {
   titleHistory: [],
 };
 
-const quests = [
+const defaultQuests = [
   {
     id: "homework",
     type: "normal",
@@ -174,7 +176,7 @@ const characterStages = [
 ];
 
 let progress = loadProgress();
-let customQuests = loadCustomQuests();
+let managedQuests = loadManagedQuests();
 let rewards = loadRewards();
 let rewardHistory = loadRewardHistory();
 let rewardToastTimer;
@@ -186,8 +188,10 @@ let pendingXpAnimationStart = null;
 let currentCharacterSrc = "";
 let currentTitleName = "";
 let isParentUnlocked = false;
+let isParentMode = false;
 let editingQuestId = null;
 let editingRewardId = null;
+let isQuestCreateOpen = false;
 
 function loadProgress() {
   try {
@@ -338,13 +342,17 @@ function normalizeQuest(rawQuest) {
     description: String(rawQuest.description || "").trim(),
     xpReward: Math.max(0, Math.round(xpReward)),
     goldReward: Math.max(0, Math.round(goldReward)),
-    createdBy: "parent",
+    createdBy: rawQuest.createdBy === "system" ? "system" : "parent",
   };
 }
 
-function loadCustomQuests() {
+function getDefaultManagedQuests() {
+  return defaultQuests.map((quest) => normalizeQuest({ ...quest, createdBy: "system" })).filter(Boolean);
+}
+
+function loadLegacyCustomQuests() {
   try {
-    const stored = localStorage.getItem(CUSTOM_QUESTS_KEY);
+    const stored = localStorage.getItem(LEGACY_CUSTOM_QUESTS_KEY);
     if (!stored) {
       return [];
     }
@@ -360,8 +368,36 @@ function loadCustomQuests() {
   }
 }
 
-function saveCustomQuests() {
-  localStorage.setItem(CUSTOM_QUESTS_KEY, JSON.stringify(customQuests));
+function loadManagedQuests() {
+  try {
+    const stored = localStorage.getItem(QUESTS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.map(normalizeQuest).filter(Boolean);
+      }
+    }
+  } catch {
+    return isTestMode ? getDefaultManagedQuests() : [];
+  }
+
+  const legacyQuests = loadLegacyCustomQuests();
+  if (legacyQuests.length > 0) {
+    localStorage.setItem(QUESTS_KEY, JSON.stringify(legacyQuests));
+    return legacyQuests;
+  }
+
+  if (isTestMode) {
+    const testQuests = getDefaultManagedQuests();
+    localStorage.setItem(QUESTS_KEY, JSON.stringify(testQuests));
+    return testQuests;
+  }
+
+  return [];
+}
+
+function saveManagedQuests() {
+  localStorage.setItem(QUESTS_KEY, JSON.stringify(managedQuests));
 }
 
 function normalizeReward(rawReward) {
@@ -470,7 +506,7 @@ function notifyRewardExchange(historyItem) {
 }
 
 function getAllQuests() {
-  return [...customQuests, ...quests];
+  return managedQuests;
 }
 
 function getQuestTypeLabel(type) {
@@ -644,6 +680,10 @@ function completeQuest(questId, sourceElement) {
 }
 
 function resetProgress() {
+  if (!isParentMode) {
+    return;
+  }
+
   const confirmed = window.confirm("進行状況をリセットしますか？");
   if (!confirmed) {
     return;
@@ -657,6 +697,18 @@ function resetProgress() {
 function renderDevTools() {
   document.querySelectorAll("[data-dev-tools]").forEach((tool) => {
     tool.hidden = !DEV_MODE;
+  });
+}
+
+function renderModeControls() {
+  document.querySelectorAll("[data-test-only]").forEach((element) => {
+    element.hidden = !isTestMode;
+  });
+}
+
+function renderParentModeControls() {
+  document.querySelectorAll("[data-parent-mode-only]").forEach((element) => {
+    element.hidden = !isParentMode;
   });
 }
 
@@ -722,9 +774,11 @@ function handleParentAuthSubmit(event) {
 
   if (pin === PARENT_PIN) {
     isParentUnlocked = true;
+    isParentMode = true;
     if (message) {
       message.textContent = "";
     }
+    renderParentModeControls();
     switchScreen("admin");
     return;
   }
@@ -733,6 +787,16 @@ function handleParentAuthSubmit(event) {
     message.textContent = "PINが違います";
   }
   input?.select();
+}
+
+function exitParentMode() {
+  isParentMode = false;
+  isParentUnlocked = false;
+  editingQuestId = null;
+  editingRewardId = null;
+  isQuestCreateOpen = false;
+  render();
+  switchScreen("home");
 }
 
 function handleQuestCreateSubmit(event) {
@@ -761,17 +825,30 @@ function handleQuestCreateSubmit(event) {
     return;
   }
 
-  customQuests = [quest, ...customQuests];
+  managedQuests = [quest, ...managedQuests];
   editingQuestId = null;
-  saveCustomQuests();
+  saveManagedQuests();
   form.reset();
+  isQuestCreateOpen = false;
   if (message) {
     message.textContent = "クエストを追加しました";
   }
   render();
 }
 
-function renderCustomQuestManager() {
+function renderQuestCreateForm() {
+  const form = document.querySelector("[data-quest-create-form]");
+  const toggleButton = document.querySelector("[data-toggle-quest-create]");
+  if (!form || !toggleButton) {
+    return;
+  }
+
+  form.hidden = !isQuestCreateOpen;
+  toggleButton.setAttribute("aria-expanded", String(isQuestCreateOpen));
+  toggleButton.textContent = isQuestCreateOpen ? "追加フォームを閉じる" : "新しいクエスト追加";
+}
+
+function renderQuestManager() {
   const list = document.querySelector("[data-managed-quest-list]");
   if (!list) {
     return;
@@ -779,15 +856,15 @@ function renderCustomQuestManager() {
 
   list.innerHTML = "";
 
-  if (customQuests.length === 0) {
+  if (managedQuests.length === 0) {
     const empty = document.createElement("p");
     empty.className = "managed-quest-empty";
-    empty.textContent = "まだ追加されたクエストはありません。";
+    empty.textContent = "表示できるクエストはまだありません。";
     list.append(empty);
     return;
   }
 
-  customQuests.forEach((quest) => {
+  managedQuests.forEach((quest) => {
     const item = document.createElement("article");
     const typeLabel = getQuestTypeLabel(quest.type);
     item.className = `managed-quest-item managed-quest-${quest.type}`;
@@ -883,19 +960,19 @@ function handleQuestEditSubmit(event) {
     return;
   }
 
-  customQuests = customQuests.map((item) => (item.id === questId ? quest : item));
+  managedQuests = managedQuests.map((item) => (item.id === questId ? quest : item));
   editingQuestId = null;
-  saveCustomQuests();
+  saveManagedQuests();
   render();
 }
 
-function deleteCustomQuest(questId) {
+function deleteManagedQuest(questId) {
   if (!isParentUnlocked) {
     showParentAuth();
     return;
   }
 
-  const quest = customQuests.find((item) => item.id === questId);
+  const quest = managedQuests.find((item) => item.id === questId);
   if (!quest) {
     return;
   }
@@ -905,7 +982,7 @@ function deleteCustomQuest(questId) {
     return;
   }
 
-  customQuests = customQuests.filter((item) => item.id !== questId);
+  managedQuests = managedQuests.filter((item) => item.id !== questId);
   progress = {
     ...progress,
     completedQuestIds: progress.completedQuestIds.filter((id) => id !== questId),
@@ -913,7 +990,7 @@ function deleteCustomQuest(questId) {
   if (editingQuestId === questId) {
     editingQuestId = null;
   }
-  saveCustomQuests();
+  saveManagedQuests();
   saveProgress();
   render();
 }
@@ -1528,8 +1605,11 @@ function render() {
   renderQuests();
   renderTodayQuests();
   renderRewardShop();
+  renderModeControls();
+  renderParentModeControls();
   renderDevTools();
-  renderCustomQuestManager();
+  renderQuestCreateForm();
+  renderQuestManager();
   renderRewardManager();
   renderRewardHistory();
 }
@@ -1614,6 +1694,23 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const parentModeExitButton = event.target.closest("[data-parent-mode-exit]");
+  if (parentModeExitButton) {
+    exitParentMode();
+    return;
+  }
+
+  const toggleQuestCreateButton = event.target.closest("[data-toggle-quest-create]");
+  if (toggleQuestCreateButton) {
+    if (!isParentUnlocked) {
+      showParentAuth();
+      return;
+    }
+    isQuestCreateOpen = !isQuestCreateOpen;
+    renderQuestCreateForm();
+    return;
+  }
+
   const editQuestButton = event.target.closest("[data-edit-quest]");
   if (editQuestButton) {
     if (!isParentUnlocked) {
@@ -1621,20 +1718,20 @@ document.addEventListener("click", (event) => {
       return;
     }
     editingQuestId = editQuestButton.dataset.editQuest;
-    renderCustomQuestManager();
+    renderQuestManager();
     return;
   }
 
   const cancelEditButton = event.target.closest("[data-cancel-edit-quest]");
   if (cancelEditButton) {
     editingQuestId = null;
-    renderCustomQuestManager();
+    renderQuestManager();
     return;
   }
 
   const deleteQuestButton = event.target.closest("[data-delete-quest]");
   if (deleteQuestButton) {
-    deleteCustomQuest(deleteQuestButton.dataset.deleteQuest);
+    deleteManagedQuest(deleteQuestButton.dataset.deleteQuest);
     return;
   }
 

@@ -5,7 +5,6 @@ const REWARDS_KEY = "sora_guild_app_rewards_dev";
 const REWARD_HISTORY_KEY = "sora_guild_app_reward_history_dev";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 const isTestMode = false;
-const DEV_MODE = false;
 const PARENT_PIN = "1234";
 
 const defaultProgress = {
@@ -696,7 +695,12 @@ function resetProgress() {
 
 function renderDevTools() {
   document.querySelectorAll("[data-dev-tools]").forEach((tool) => {
-    tool.hidden = !DEV_MODE;
+    if (!isTestMode) {
+      tool.remove();
+      return;
+    }
+
+    tool.hidden = false;
   });
 }
 
@@ -839,10 +843,21 @@ function handleQuestCreateSubmit(event) {
 function renderQuestCreateForm() {
   const form = document.querySelector("[data-quest-create-form]");
   const toggleButton = document.querySelector("[data-toggle-quest-create]");
-  if (!form || !toggleButton) {
+  if (!form) {
     return;
   }
 
+  if (!isTestMode) {
+    toggleButton?.remove();
+    form.hidden = false;
+    return;
+  }
+
+  if (!toggleButton) {
+    return;
+  }
+
+  toggleButton.hidden = false;
   form.hidden = !isQuestCreateOpen;
   toggleButton.setAttribute("aria-expanded", String(isQuestCreateOpen));
   toggleButton.textContent = isQuestCreateOpen ? "追加フォームを閉じる" : "新しいクエスト追加";
@@ -1689,7 +1704,7 @@ document.addEventListener("click", (event) => {
   }
 
   const devLevelButton = event.target.closest("[data-dev-level-up]");
-  if (devLevelButton && DEV_MODE) {
+  if (devLevelButton && isTestMode) {
     devLevelUp();
     return;
   }

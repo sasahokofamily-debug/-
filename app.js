@@ -27,6 +27,7 @@ const defaultQuests = [
     type: "normal",
     title: "宿題を終える",
     description: "今日の宿題を最後まで片づける。",
+    frequency: "daily",
     xpReward: 40,
     goldReward: 30,
   },
@@ -35,6 +36,7 @@ const defaultQuests = [
     type: "normal",
     title: "音読をする",
     description: "声に出して読み、聞いてもらう。",
+    frequency: "daily",
     xpReward: 30,
     goldReward: 20,
   },
@@ -43,6 +45,7 @@ const defaultQuests = [
     type: "normal",
     title: "お手伝いをする",
     description: "家の中で一つ、誰かの助けになる。",
+    frequency: "daily",
     xpReward: 35,
     goldReward: 25,
   },
@@ -219,11 +222,38 @@ function saveProgress() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
 }
 
+function getJapanDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("ja-JP-u-ca-gregory", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+  };
+}
+
 function getDateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const { year, month: monthValue, day: dayValue } = getJapanDateParts(date);
+  const month = String(monthValue).padStart(2, "0");
+  const day = String(dayValue).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getWeekKey(date = new Date()) {
+  const { year, month, day } = getJapanDateParts(date);
+  const japanDate = new Date(Date.UTC(year, month - 1, day));
+  const dayOfWeek = japanDate.getUTCDay() || 7;
+  japanDate.setUTCDate(japanDate.getUTCDate() - dayOfWeek + 1);
+  const weekYear = japanDate.getUTCFullYear();
+  const weekMonth = String(japanDate.getUTCMonth() + 1).padStart(2, "0");
+  const weekDay = String(japanDate.getUTCDate()).padStart(2, "0");
+  return `${weekYear}-${weekMonth}-${weekDay}`;
 }
 
 function getDayDifference(fromDateKey, toDateKey) {
@@ -329,6 +359,7 @@ function normalizeQuest(rawQuest) {
   const goldReward = Number(rawQuest.goldReward);
   const title = String(rawQuest.title || "").trim();
   const type = ["normal", "urgent", "boss"].includes(rawQuest.type) ? rawQuest.type : "normal";
+  const frequency = ["once", "daily", "weekly"].includes(rawQuest.frequency) ? rawQuest.frequency : "daily";
 
   if (!title || !Number.isFinite(xpReward) || !Number.isFinite(goldReward)) {
     return null;
@@ -338,6 +369,7 @@ function normalizeQuest(rawQuest) {
     id: String(rawQuest.id || `parent-${Date.now()}`),
     title,
     type,
+    frequency,
     description: String(rawQuest.description || "").trim(),
     xpReward: Math.max(0, Math.round(xpReward)),
     goldReward: Math.max(0, Math.round(goldReward)),
@@ -506,6 +538,28 @@ function getAllQuests() {
   return managedQuests;
 }
 
+function getQuestCompletionKey(quest) {
+  if (quest.frequency === "daily") {
+    return `${quest.id}:daily:${getDateKey()}`;
+  }
+  if (quest.frequency === "weekly") {
+    return `${quest.id}:weekly:${getWeekKey()}`;
+  }
+  return quest.id;
+}
+
+function isQuestCompleted(quest) {
+  return progress.completedQuestIds.includes(getQuestCompletionKey(quest));
+}
+
+function isQuestVisible(quest) {
+  return quest.frequency !== "once" || !isQuestCompleted(quest);
+}
+
+function getVisibleQuests() {
+  return getAllQuests().filter(isQuestVisible);
+}
+
 function getQuestTypeLabel(type) {
   if (type === "urgent") {
     return "緊急";
@@ -514,6 +568,16 @@ function getQuestTypeLabel(type) {
     return "BOSS";
   }
   return "";
+}
+
+function getQuestFrequencyLabel(frequency) {
+  if (frequency === "once") {
+    return "単発";
+  }
+  if (frequency === "weekly") {
+    return "毎週";
+  }
+  return "毎日";
 }
 
 function escapeHtml(value) {
@@ -623,7 +687,7 @@ function getCharacterImageCandidatesForLevel(level) {
 
 function completeQuest(questId, sourceElement) {
   const quest = getAllQuests().find((item) => item.id === questId);
-  if (!quest || progress.completedQuestIds.includes(questId)) {
+  if (!quest || !isQuestVisible(quest) || isQuestCompleted(quest)) {
     return;
   }
 
@@ -639,7 +703,7 @@ function completeQuest(questId, sourceElement) {
     ...progress,
     xp: nextXp,
     gold: progress.gold + quest.goldReward,
-    completedQuestIds: [...progress.completedQuestIds, questId],
+    completedQuestIds: [...progress.completedQuestIds, getQuestCompletionKey(quest)],
     streak: updateStreakOnQuestComplete(progress.streak),
     activityLog: [
       {
@@ -814,6 +878,7 @@ function handleQuestCreateSubmit(event) {
   const quest = normalizeQuest({
     id: `parent-${Date.now()}`,
     type: formData.get("type"),
+    frequency: formData.get("frequency"),
     title: formData.get("title"),
     description: formData.get("description"),
     xpReward: formData.get("xp"),
@@ -894,6 +959,14 @@ function renderQuestManager() {
             </select>
           </label>
           <label>
+            繰り返し設定
+            <select name="frequency">
+              <option value="daily"${quest.frequency === "daily" ? " selected" : ""}>毎日</option>
+              <option value="weekly"${quest.frequency === "weekly" ? " selected" : ""}>毎週</option>
+              <option value="once"${quest.frequency === "once" ? " selected" : ""}>単発</option>
+            </select>
+          </label>
+          <label>
             クエスト名
             <input type="text" name="title" value="${escapeHtml(quest.title)}" required>
           </label>
@@ -923,7 +996,10 @@ function renderQuestManager() {
         <div class="managed-quest-copy">
           <div class="managed-quest-title-row">
             <h4>${escapeHtml(quest.title)}</h4>
-            ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+            <div class="quest-title-badges">
+              ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+              <span class="quest-frequency-badge">${getQuestFrequencyLabel(quest.frequency)}</span>
+            </div>
           </div>
           <p>${escapeHtml(quest.description)}</p>
           <div class="reward-row">
@@ -959,6 +1035,7 @@ function handleQuestEditSubmit(event) {
   const quest = normalizeQuest({
     id: questId,
     type: formData.get("type"),
+    frequency: formData.get("frequency"),
     title: formData.get("title"),
     description: formData.get("description"),
     xpReward: formData.get("xp"),
@@ -998,7 +1075,7 @@ function deleteManagedQuest(questId) {
   managedQuests = managedQuests.filter((item) => item.id !== questId);
   progress = {
     ...progress,
-    completedQuestIds: progress.completedQuestIds.filter((id) => id !== questId),
+    completedQuestIds: progress.completedQuestIds.filter((id) => id !== questId && !id.startsWith(`${questId}:`)),
   };
   if (editingQuestId === questId) {
     editingQuestId = null;
@@ -1254,9 +1331,10 @@ function renderQuests() {
   const list = document.querySelector("[data-quest-list]");
   list.innerHTML = "";
 
-  getAllQuests().forEach((quest) => {
-    const completed = progress.completedQuestIds.includes(quest.id);
+  getVisibleQuests().forEach((quest) => {
+    const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
+    const frequencyLabel = getQuestFrequencyLabel(quest.frequency);
     const card = document.createElement("article");
     card.className = `quest-card quest-card-${quest.type}${completed ? " is-completed" : ""}`;
 
@@ -1265,6 +1343,7 @@ function renderQuests() {
         <h3>${escapeHtml(quest.title)}</h3>
         <div class="quest-title-badges">
           ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+          <span class="quest-frequency-badge">${frequencyLabel}</span>
           ${completed ? '<span class="status-badge">完了済み</span>' : ""}
         </div>
       </div>
@@ -1290,9 +1369,10 @@ function renderTodayQuests() {
 
   list.innerHTML = "";
 
-  getAllQuests().slice(0, 3).forEach((quest) => {
-    const completed = progress.completedQuestIds.includes(quest.id);
+  getVisibleQuests().slice(0, 3).forEach((quest) => {
+    const completed = isQuestCompleted(quest);
     const typeLabel = getQuestTypeLabel(quest.type);
+    const frequencyLabel = getQuestFrequencyLabel(quest.frequency);
     const item = document.createElement("article");
     item.className = `today-quest-item today-quest-${quest.type}${completed ? " is-completed" : ""}`;
 
@@ -1300,7 +1380,10 @@ function renderTodayQuests() {
       <div>
         <div class="today-quest-title-row">
           <h4>${escapeHtml(quest.title)}</h4>
-          ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+          <div class="quest-title-badges">
+            ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
+            <span class="quest-frequency-badge">${frequencyLabel}</span>
+          </div>
         </div>
         <p>${escapeHtml(quest.description)}</p>
       </div>

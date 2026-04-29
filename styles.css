@@ -976,7 +976,8 @@ h3 {
   min-width: 0;
 }
 
-.today-quest-title-row .quest-type-badge {
+.today-quest-title-row .quest-type-badge,
+.today-quest-title-row .quest-frequency-badge {
   min-height: 22px;
   padding: 3px 7px;
   font-size: 0.68rem;
@@ -1309,7 +1310,8 @@ h3 {
 
 .reward-badge,
 .status-badge,
-.quest-type-badge {
+.quest-type-badge,
+.quest-frequency-badge {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
@@ -1334,6 +1336,13 @@ h3 {
   flex: 0 0 auto;
   color: #fff8e6;
   letter-spacing: 0;
+}
+
+.quest-frequency-badge {
+  flex: 0 0 auto;
+  color: var(--wood-dark);
+  background: rgba(241, 210, 122, 0.34);
+  border: 1px solid rgba(201, 154, 53, 0.24);
 }
 
 .quest-type-urgent {

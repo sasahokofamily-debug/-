@@ -487,15 +487,13 @@ function notifyRewardExchange(historyItem) {
 
   return fetch(NOTIFY_URL, {
     method: "POST",
+    mode: "no-cors",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "text/plain;charset=utf-8",
     },
     body: JSON.stringify(data),
   })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`Notify failed: ${response.status}`);
-      }
+    .then(() => {
       return true;
     })
     .catch((error) => {

@@ -65,10 +65,16 @@ body::after {
   inset: 0;
   z-index: 0;
   background:
+    radial-gradient(circle at 50% 9%, rgba(255, 181, 75, 0.2), rgba(241, 142, 52, 0.08) 12rem, transparent 23rem),
+    radial-gradient(circle at 14% 37%, rgba(241, 210, 122, 0.12), transparent 14rem),
+    radial-gradient(circle at 86% 40%, rgba(241, 210, 122, 0.1), transparent 13rem),
     radial-gradient(circle at 50% 18%, rgba(241, 210, 122, 0.14), transparent 34rem),
     linear-gradient(180deg, rgba(39, 26, 22, 0.26), rgba(29, 43, 66, 0.34)),
     rgba(39, 26, 22, 0.28);
+  animation: guildLampFlicker 4.8s ease-in-out infinite alternate;
   pointer-events: none;
+  transform-origin: 50% 14%;
+  will-change: opacity, transform, filter;
 }
 
 body.is-level-up-flash::before {
@@ -90,6 +96,27 @@ input {
 
 button {
   cursor: pointer;
+}
+
+@keyframes guildLampFlicker {
+  0%,
+  100% {
+    opacity: 0.92;
+    filter: brightness(0.98);
+    transform: scale(1);
+  }
+
+  42% {
+    opacity: 1;
+    filter: brightness(1.04);
+    transform: scale(1.012);
+  }
+
+  68% {
+    opacity: 0.96;
+    filter: brightness(1.01);
+    transform: scale(1.006);
+  }
 }
 
 .app-shell {

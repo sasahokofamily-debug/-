@@ -6,6 +6,7 @@ const REWARD_HISTORY_KEY = "sora_guild_app_reward_history_dev";
 const ACHIEVEMENTS_KEY = "guildAchievements";
 const WEEKLY_REPORT_HISTORY_KEY = "sora_guild_app_weekly_report_history_dev";
 const PARENT_NOTES_KEY = "sora_guild_app_parent_notes_dev";
+const ONBOARDING_KEY = "hasSeenOnboarding";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
 const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
@@ -22,6 +23,28 @@ const QUEST_PRIORITY_ORDER = {
   low: 2,
 };
 const QUEST_CATEGORY_ORDER = ["daily_required", "challenge"];
+const ONBOARDING_SLIDES = [
+  {
+    kicker: "Guild Start",
+    title: "毎日のクエストで成長しよう",
+    text: "宿題やお手伝いをクエストとして達成すると、XP・Gold・能力値が育ちます。",
+  },
+  {
+    kicker: "Daily Mission",
+    title: "毎日クエスト",
+    text: "今日やる最低限の任務です。終わると「今日の分、達成！」になります。",
+  },
+  {
+    kicker: "Challenge",
+    title: "チャレンジクエスト",
+    text: "できたら挑戦する追加依頼です。お手伝いや特別な挑戦に使えます。",
+  },
+  {
+    kicker: "Guild Master",
+    title: "親モード",
+    text: "クエストやご褒美の管理、リセット、親メモはギルド管理から行います。",
+  },
+];
 const BACKUP_STORAGE_KEYS = [
   STORAGE_KEY,
   QUESTS_KEY,
@@ -31,6 +54,7 @@ const BACKUP_STORAGE_KEYS = [
   ACHIEVEMENTS_KEY,
   WEEKLY_REPORT_HISTORY_KEY,
   PARENT_NOTES_KEY,
+  ONBOARDING_KEY,
 ];
 
 const defaultProgress = {
@@ -253,6 +277,7 @@ let questSwipeStartY = 0;
 let growthChartMode = "xp";
 let previousDailyRequiredComplete = false;
 let hasRenderedQuestCategoryProgress = false;
+let onboardingIndex = 0;
 
 function getDefaultProgressState() {
   return {
@@ -2970,6 +2995,79 @@ function renderParentNote() {
   }
 }
 
+function renderOnboardingSlide() {
+  const slide = ONBOARDING_SLIDES[onboardingIndex] || ONBOARDING_SLIDES[0];
+  const kicker = document.querySelector("[data-onboarding-kicker]");
+  const title = document.querySelector("[data-onboarding-title]");
+  const text = document.querySelector("[data-onboarding-text]");
+  const dots = document.querySelector("[data-onboarding-dots]");
+  const prev = document.querySelector("[data-onboarding-prev]");
+  const next = document.querySelector("[data-onboarding-next]");
+
+  if (kicker) {
+    kicker.textContent = slide.kicker;
+  }
+  if (title) {
+    title.textContent = slide.title;
+  }
+  if (text) {
+    text.textContent = slide.text;
+  }
+  if (dots) {
+    dots.innerHTML = ONBOARDING_SLIDES.map(
+      (_, index) => `<span class="${index === onboardingIndex ? "is-active" : ""}"></span>`,
+    ).join("");
+  }
+  if (prev) {
+    prev.hidden = onboardingIndex === 0;
+  }
+  if (next) {
+    next.textContent = onboardingIndex === ONBOARDING_SLIDES.length - 1 ? "はじめる" : "次へ";
+  }
+}
+
+function showOnboardingIfNeeded() {
+  if (localStorage.getItem(ONBOARDING_KEY) === "true") {
+    return false;
+  }
+
+  const modal = document.querySelector("[data-onboarding-modal]");
+  if (!modal) {
+    return false;
+  }
+
+  onboardingIndex = 0;
+  renderOnboardingSlide();
+  modal.hidden = false;
+  document.body.classList.add("is-onboarding-open");
+  return true;
+}
+
+function completeOnboarding() {
+  localStorage.setItem(ONBOARDING_KEY, "true");
+  const modal = document.querySelector("[data-onboarding-modal]");
+  if (modal) {
+    modal.hidden = true;
+  }
+  document.body.classList.remove("is-onboarding-open");
+  window.setTimeout(showAppReminderToast, 300);
+}
+
+function nextOnboardingSlide() {
+  if (onboardingIndex >= ONBOARDING_SLIDES.length - 1) {
+    completeOnboarding();
+    return;
+  }
+
+  onboardingIndex += 1;
+  renderOnboardingSlide();
+}
+
+function previousOnboardingSlide() {
+  onboardingIndex = Math.max(0, onboardingIndex - 1);
+  renderOnboardingSlide();
+}
+
 function playQuestCompleteAnimation(questId) {
   const card = [...document.querySelectorAll("[data-quest-card]")].find((item) => item.dataset.questCard === questId);
   if (!card) {
@@ -3718,6 +3816,24 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const onboardingSkipButton = event.target.closest("[data-onboarding-skip]");
+  if (onboardingSkipButton) {
+    completeOnboarding();
+    return;
+  }
+
+  const onboardingNextButton = event.target.closest("[data-onboarding-next]");
+  if (onboardingNextButton) {
+    nextOnboardingSlide();
+    return;
+  }
+
+  const onboardingPrevButton = event.target.closest("[data-onboarding-prev]");
+  if (onboardingPrevButton) {
+    previousOnboardingSlide();
+    return;
+  }
+
   const openGuildButton = event.target.closest("[data-open-guild]");
   if (openGuildButton) {
     if (!isParentUnlocked) {
@@ -3904,8 +4020,11 @@ if (!progress.visitedScreens.includes("home")) {
 }
 const loginBonusResult = applyLoginBonus();
 render();
-window.setTimeout(showAppReminderToast, loginBonusResult.granted ? 2100 : 450);
-if (loginBonusResult.granted) {
+const isOnboardingVisible = showOnboardingIfNeeded();
+if (!isOnboardingVisible) {
+  window.setTimeout(showAppReminderToast, loginBonusResult.granted ? 2100 : 450);
+}
+if (loginBonusResult.granted && !isOnboardingVisible) {
   showLoginBonusToast(loginBonusResult);
 }
 sendWeeklyReport();

@@ -3,7 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#6b4f2a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="そらギルド">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>そらクエスト</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./assets/icons/pwa-icon-192.png">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -560,6 +566,19 @@
       <div class="clear-toast" data-clear-toast aria-live="polite"></div>
       <div class="level-up-toast" data-level-up-toast aria-live="polite">レベルアップ！</div>
       <div class="evolution-toast" data-evolution-toast aria-live="polite"></div>
+      <div class="onboarding-modal" data-onboarding-modal hidden>
+        <div class="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+          <button class="onboarding-skip" type="button" data-onboarding-skip>スキップ</button>
+          <p class="section-kicker" data-onboarding-kicker>Guild Start</p>
+          <h3 id="onboarding-title" data-onboarding-title>毎日のクエストで成長しよう</h3>
+          <p data-onboarding-text>宿題やお手伝いをクエストとして達成すると、XP・Gold・能力値が育ちます。</p>
+          <div class="onboarding-dots" data-onboarding-dots aria-hidden="true"></div>
+          <div class="onboarding-actions">
+            <button class="onboarding-back" type="button" data-onboarding-prev>戻る</button>
+            <button class="onboarding-next" type="button" data-onboarding-next>次へ</button>
+          </div>
+        </div>
+      </div>
       <div class="complete-confirm" data-complete-confirm hidden>
         <div class="complete-confirm-card" role="dialog" aria-modal="true" aria-labelledby="complete-confirm-title">
           <p class="section-kicker">Quest Clear</p>

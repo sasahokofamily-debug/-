@@ -1,6 +1,6 @@
 {
-  "name": "そらギルド",
-  "short_name": "そらギルド",
+  "name": "そらクエスト",
+  "short_name": "そらクエスト",
   "description": "毎日のクエストで成長を記録するギルド風アプリ",
   "start_url": "./",
   "scope": "./",

@@ -3840,12 +3840,6 @@ document.querySelectorAll("[data-nav-icon-image]").forEach((image) => {
 });
 
 document.addEventListener("click", (event) => {
-  const bgmToggleButton = event.target.closest("[data-bgm-toggle]");
-  if (bgmToggleButton) {
-    setBgmEnabled(!bgmEnabled);
-    return;
-  }
-
   const navButton = event.target.closest("[data-nav]");
   if (navButton) {
     if (navButton.dataset.nav === "admin" && !isParentUnlocked) {

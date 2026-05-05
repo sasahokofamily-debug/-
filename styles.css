@@ -206,32 +206,6 @@ h3 {
   font-size: 1.05rem;
 }
 
-.bgm-toggle {
-  position: relative;
-  z-index: 30;
-  min-height: 38px;
-  margin-left: auto;
-  border: 1px solid rgba(241, 210, 122, 0.44);
-  border-radius: 999px;
-  padding: 8px 12px;
-  color: rgba(255, 247, 223, 0.86);
-  background: rgba(39, 26, 22, 0.62);
-  box-shadow: 0 8px 16px rgba(23, 12, 9, 0.2), inset 0 1px 0 rgba(255, 247, 223, 0.1);
-  font-size: 0.72rem;
-  font-weight: 950;
-  white-space: nowrap;
-}
-
-.bgm-toggle.is-active {
-  color: var(--wood-dark);
-  background: linear-gradient(180deg, rgba(255, 247, 223, 0.9), rgba(241, 210, 122, 0.72));
-  box-shadow: 0 8px 16px rgba(23, 12, 9, 0.18), 0 0 14px rgba(241, 210, 122, 0.2);
-}
-
-.bgm-toggle:active {
-  transform: translateY(2px) scale(0.98);
-}
-
 .parent-mode-tools {
   position: relative;
   z-index: 30;

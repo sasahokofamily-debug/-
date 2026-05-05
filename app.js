@@ -282,7 +282,7 @@ let growthChartMode = "xp";
 let previousDailyRequiredComplete = false;
 let hasRenderedQuestCategoryProgress = false;
 let onboardingIndex = 0;
-let bgmEnabled = localStorage.getItem(BGM_ENABLED_KEY) === "true";
+let bgmEnabled = true;
 let bgmAudio = null;
 let bgmInteractionArmed = false;
 
@@ -478,10 +478,10 @@ function setBgmEnabled(enabled) {
 }
 
 function initializeBgm() {
-  updateBgmButton();
-  if (bgmEnabled) {
-    armBgmStartOnInteraction();
-  }
+  bgmEnabled = true;
+  localStorage.setItem(BGM_ENABLED_KEY, "true");
+  playBgm();
+  armBgmStartOnInteraction();
 }
 
 function normalizeWeeklyReportHistoryItem(rawItem) {

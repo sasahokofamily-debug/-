@@ -10,6 +10,8 @@ const ONBOARDING_KEY = "hasSeenOnboarding";
 const BGM_ENABLED_KEY = "sora_guild_app_bgm_enabled_dev";
 const BGM_SRC = "assets/audio/bgm/bgm_main.mp3";
 const BGM_VOLUME = 0.24;
+const SFX_ENABLED_KEY = "sora_guild_app_sfx_enabled_dev";
+const SFX_VOLUME = 0.55;
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
 const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
@@ -59,6 +61,7 @@ const BACKUP_STORAGE_KEYS = [
   PARENT_NOTES_KEY,
   ONBOARDING_KEY,
   BGM_ENABLED_KEY,
+  SFX_ENABLED_KEY,
 ];
 
 const defaultProgress = {
@@ -285,6 +288,15 @@ let onboardingIndex = 0;
 let bgmEnabled = true;
 let bgmAudio = null;
 let bgmInteractionArmed = false;
+let sfxEnabled = localStorage.getItem(SFX_ENABLED_KEY) !== "false";
+const sounds = {
+  tab: new Audio("assets/audio/sfx/sfx_tab.mp3"),
+  gold: new Audio("assets/audio/sfx/sfx_gold.mp3"),
+  achievement: new Audio("assets/audio/sfx/sfx_achievement.mp3"),
+  levelUp: new Audio("assets/audio/sfx/sfx_level_up.mp3"),
+  questComplete: new Audio("assets/audio/sfx/sfx_quest_complete.mp3"),
+  rewardOpen: new Audio("assets/audio/sfx/sfx_reward_open.mp3"),
+};
 
 function getDefaultProgressState() {
   return {
@@ -501,6 +513,40 @@ function initializeBgm() {
   localStorage.setItem(BGM_ENABLED_KEY, "true");
   armBgmStartOnInteraction();
   playBgm();
+}
+
+Object.entries(sounds).forEach(([name, sound]) => {
+  sound.preload = "auto";
+  sound.volume = SFX_VOLUME;
+  sound.addEventListener("error", () => {
+    console.warn(`効果音を読み込めませんでした: ${name}`);
+  });
+});
+
+function playSound(name) {
+  if (!sfxEnabled) {
+    return;
+  }
+  const sound = sounds[name];
+  if (!sound) {
+    return;
+  }
+  try {
+    sound.pause();
+    sound.currentTime = 0;
+    sound.volume = SFX_VOLUME;
+    const playPromise = sound.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+  } catch (error) {
+    console.warn(`効果音を再生できませんでした: ${name}`, error);
+  }
+}
+
+function setSfxEnabled(enabled) {
+  sfxEnabled = enabled;
+  localStorage.setItem(SFX_ENABLED_KEY, JSON.stringify(sfxEnabled));
 }
 
 function normalizeWeeklyReportHistoryItem(rawItem) {
@@ -1679,6 +1725,7 @@ function showAchievementToast(achievements) {
   toast.classList.remove("is-visible");
   void toast.offsetWidth;
   toast.classList.add("is-visible");
+  window.setTimeout(() => playSound("achievement"), 320);
 
   window.clearTimeout(achievementToastTimer);
   achievementToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
@@ -1792,6 +1839,7 @@ function completeQuest(questId, sourceElement) {
   saveProgress();
   render();
   sendWeeklyReport();
+  playSound("questComplete");
   playQuestCompleteAnimation(quest.id);
   queueXpChangeAnimation(getLevel(progress.xp) > previousLevel ? 0 : previousLevelProgress);
   showRewardFeedback(quest);
@@ -2235,6 +2283,7 @@ function devLevelUp() {
 }
 
 function switchScreen(screenId) {
+  const currentScreen = document.querySelector(".screen.is-active")?.dataset.screen || "";
   document.querySelectorAll("[data-screen]").forEach((screen) => {
     screen.classList.toggle("is-active", screen.dataset.screen === screenId);
   });
@@ -2247,6 +2296,9 @@ function switchScreen(screenId) {
   if (screenId === "home" && pendingXpAnimationStart !== null) {
     animateXpBarFrom(pendingXpAnimationStart);
     pendingXpAnimationStart = null;
+  }
+  if (currentScreen && currentScreen !== screenId) {
+    playSound("tab");
   }
   markScreenVisited(activeNavId);
 }
@@ -2851,6 +2903,7 @@ function exchangeReward(rewardId) {
     return;
   }
 
+  playSound("rewardOpen");
   progress = {
     ...progress,
     gold: progress.gold - reward.cost,
@@ -3002,6 +3055,7 @@ function switchQuestCategory(category) {
   }
 
   activeQuestCategory = category;
+  playSound("tab");
   renderQuests();
 }
 
@@ -3375,6 +3429,7 @@ function playLevelUpAnimation() {
     characterImage.classList.add("is-level-up");
   }
   levelUpToast.classList.add("is-visible");
+  window.setTimeout(() => playSound("levelUp"), 180);
 
   window.clearTimeout(levelUpTimer);
   levelUpTimer = window.setTimeout(() => {
@@ -3464,6 +3519,7 @@ function showAppReminderToast() {
 }
 
 function showLoginBonusToast(loginBonusResult) {
+  playSound("gold");
   playLoginBonusToast(`ログインボーナス！ Gold +${LOGIN_BONUS_GOLD}`);
 
   if (loginBonusResult?.streakBonus) {

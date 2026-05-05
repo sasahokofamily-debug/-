@@ -2734,14 +2734,17 @@ function renderRewardShop() {
 
   rewards.forEach((reward) => {
     const canExchange = progress.gold >= reward.cost;
+    const remainingGold = Math.max(0, reward.cost - progress.gold);
     const item = document.createElement("article");
-    item.className = `reward-shop-item${canExchange ? "" : " is-locked"}`;
+    item.className = `reward-shop-item${canExchange ? " is-available" : " is-locked"}`;
     item.innerHTML = `
-      <div>
+      <div class="reward-shop-copy">
+        ${canExchange ? '<span class="reward-available-label">交換できる！</span>' : '<span class="reward-locked-label">Goldをためよう</span>'}
         <h4>${escapeHtml(reward.name)}</h4>
-        <p>${reward.cost}Gで交換${canExchange ? "できます" : `できます（あと${reward.cost - progress.gold}G）`}</p>
+        <p class="reward-cost"><strong>${reward.cost}</strong><span>Gold</span></p>
+        <p class="reward-note">${canExchange ? "今すぐ交換できます" : `あと${remainingGold}Gold`}</p>
       </div>
-      <button type="button" data-exchange-reward="${escapeHtml(reward.id)}" ${canExchange ? "" : "disabled"}>${canExchange ? "交換" : "Gold不足"}</button>
+      <button type="button" data-exchange-reward="${escapeHtml(reward.id)}" ${canExchange ? "" : "disabled"}>${canExchange ? "交換する" : "Gold不足"}</button>
     `;
     list.append(item);
   });
@@ -3008,17 +3011,23 @@ function renderQuests() {
     return;
   }
 
+  let hasMarkedNextQuest = false;
   visibleQuests.forEach((quest) => {
     const completed = isQuestCompleted(quest);
+    const isNextQuest = !completed && !hasMarkedNextQuest;
     const typeLabel = getQuestTypeLabel(quest.type);
     const frequencyLabel = getQuestFrequencyLabel(quest.frequency, quest.scheduleDays);
     const priorityLabel = getQuestPriorityLabel(quest.priority);
     const card = document.createElement("article");
-    card.className = `quest-card quest-card-${quest.type} quest-card-category-${quest.category} quest-card-priority-${quest.priority}${completed ? " is-completed" : ""}`;
+    card.className = `quest-card quest-card-${quest.type} quest-card-category-${quest.category} quest-card-priority-${quest.priority}${completed ? " is-completed" : ""}${isNextQuest ? " is-next-quest" : ""}`;
     card.dataset.questCard = quest.id;
+    if (isNextQuest) {
+      hasMarkedNextQuest = true;
+    }
 
     card.innerHTML = `
       <div class="quest-title-row">
+        ${isNextQuest ? '<span class="next-quest-label">次の任務</span>' : ""}
         <h3>${escapeHtml(quest.title)}</h3>
         <div class="quest-title-badges">
           ${typeLabel ? `<span class="quest-type-badge quest-type-${quest.type}">${typeLabel}</span>` : ""}
@@ -3036,7 +3045,7 @@ function renderQuests() {
         <span class="stat-reward-badge stat-${quest.stat}">${getStatLabel(quest.stat)} +1</span>
       </div>
       <button class="complete-button" type="button" data-complete="${quest.id}" ${completed ? "disabled" : ""}>
-        ${completed ? "達成済み" : "完了"}
+        ${completed ? "達成済み" : "挑戦する"}
       </button>
       ${
         completed && isParentMode

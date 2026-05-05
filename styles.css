@@ -1331,7 +1331,7 @@ h3 {
 
 .reward-shop-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .reward-shop-empty {
@@ -1350,11 +1350,10 @@ h3 {
 
 .reward-shop-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 68px;
-  padding: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-height: 116px;
+  padding: 14px;
   border: 1px solid rgba(176, 126, 43, 0.4);
   border-radius: 8px;
   background:
@@ -1365,28 +1364,126 @@ h3 {
   box-shadow:
     var(--paper-inner-shadow),
     0 10px 22px rgba(32, 18, 12, 0.16);
+  transform: scale(1);
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease, opacity 150ms ease;
+}
+
+.reward-shop-item.is-available {
+  border-color: rgba(241, 210, 122, 0.58);
+  box-shadow:
+    var(--paper-inner-shadow),
+    inset 0 0 0 2px rgba(241, 210, 122, 0.1),
+    0 12px 24px rgba(32, 18, 12, 0.18),
+    0 0 18px rgba(241, 210, 122, 0.14);
+  filter: brightness(1.04) saturate(1.05);
+  animation: rewardCardGlow 4.4s ease-in-out infinite;
+}
+
+.reward-shop-item.is-available::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(255, 239, 157, 0.28), transparent 1.2rem),
+    radial-gradient(circle at 82% 30%, rgba(255, 248, 220, 0.22), transparent 1rem),
+    radial-gradient(circle at 70% 82%, rgba(241, 210, 122, 0.24), transparent 1.4rem);
+  opacity: 0.38;
+  pointer-events: none;
+  animation: rewardSparkle 3.8s ease-in-out infinite;
+}
+
+.reward-shop-item.is-available:active {
+  transform: scale(1.015);
+  filter: brightness(1.08) saturate(1.08);
+}
+
+.reward-shop-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.reward-available-label,
+.reward-locked-label {
+  justify-self: start;
+  min-height: 24px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.reward-available-label {
+  color: var(--wood-dark);
+  border: 1px solid rgba(201, 154, 53, 0.42);
+  background: linear-gradient(180deg, rgba(255, 235, 154, 0.92), rgba(201, 154, 53, 0.46));
+  box-shadow: 0 0 12px rgba(241, 210, 122, 0.22);
+  animation: rewardLabelGlow 3.2s ease-in-out infinite;
+}
+
+.reward-locked-label {
+  color: rgba(84, 57, 42, 0.72);
+  border: 1px solid rgba(111, 77, 59, 0.14);
+  background: rgba(231, 221, 202, 0.58);
 }
 
 .reward-shop-item h4 {
   margin: 0;
   color: var(--ink);
-  font-size: 0.96rem;
+  font-size: clamp(1.08rem, 4.6vw, 1.26rem);
+  font-weight: 950;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
 }
 
-.reward-shop-item p {
-  margin: 4px 0 0;
+.reward-cost,
+.reward-note {
+  margin: 0;
+}
+
+.reward-cost {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--wood-dark);
+}
+
+.reward-cost strong {
+  font-size: clamp(1.28rem, 5.8vw, 1.7rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.reward-cost span {
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.reward-note {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   font-weight: 800;
 }
 
 .reward-shop-item.is-locked {
-  filter: saturate(0.86);
+  opacity: 0.86;
+  filter: saturate(0.9);
+}
+
+.reward-shop-item.is-locked .reward-cost {
+  color: rgba(84, 57, 42, 0.82);
+}
+
+.reward-shop-item.is-locked .reward-note {
+  color: rgba(126, 76, 32, 0.92);
+  font-weight: 950;
 }
 
 .reward-shop-item button {
-  min-height: 38px;
-  padding: 8px 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 14px;
   border: 0;
   border-radius: 8px;
   color: var(--cream);
@@ -1394,8 +1491,16 @@ h3 {
     linear-gradient(180deg, rgba(255, 247, 223, 0.14), transparent 38%),
     linear-gradient(180deg, #c4493e 0%, #a83730 52%, var(--red) 100%);
   box-shadow: 0 5px 0 #5b211e, 0 10px 18px rgba(59, 33, 26, 0.2);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 900;
+  transform: translateY(0) scale(1);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+.reward-shop-item button:active {
+  transform: translateY(3px) scale(0.98);
+  box-shadow: 0 2px 0 #5b211e, 0 7px 14px rgba(59, 33, 26, 0.18);
+  filter: brightness(1.08);
 }
 
 .reward-shop-item button:disabled {
@@ -1406,6 +1511,51 @@ h3 {
   box-shadow: 0 4px 0 #4f443d, 0 8px 14px rgba(59, 33, 26, 0.16);
   cursor: not-allowed;
   opacity: 0.86;
+}
+
+.reward-shop-item button:disabled:active {
+  transform: none;
+  filter: none;
+}
+
+@keyframes rewardCardGlow {
+  0%,
+  100% {
+    box-shadow:
+      var(--paper-inner-shadow),
+      inset 0 0 0 2px rgba(241, 210, 122, 0.1),
+      0 12px 24px rgba(32, 18, 12, 0.18),
+      0 0 16px rgba(241, 210, 122, 0.12);
+  }
+  50% {
+    box-shadow:
+      var(--paper-inner-shadow),
+      inset 0 0 0 2px rgba(241, 210, 122, 0.16),
+      0 14px 28px rgba(32, 18, 12, 0.2),
+      0 0 24px rgba(241, 210, 122, 0.24);
+  }
+}
+
+@keyframes rewardSparkle {
+  0%,
+  100% {
+    opacity: 0.24;
+    transform: scale(1);
+  }
+  45% {
+    opacity: 0.52;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes rewardLabelGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(241, 210, 122, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(241, 210, 122, 0.38);
+  }
 }
 
 .mini-section-heading {
@@ -2132,6 +2282,28 @@ h3 {
   transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
 }
 
+.quest-card:not(.is-completed) {
+  border-color: rgba(214, 162, 55, 0.54);
+  background-color: #f4e4bf;
+  box-shadow:
+    var(--paper-inner-shadow),
+    inset 0 0 0 2px rgba(241, 210, 122, 0.1),
+    0 7px 0 rgba(92, 54, 22, 0.14),
+    0 18px 34px rgba(32, 18, 12, 0.3),
+    0 0 18px rgba(241, 210, 122, 0.12);
+  filter: saturate(1.04) brightness(1.03);
+}
+
+.quest-card.is-next-quest {
+  border-color: rgba(241, 210, 122, 0.7);
+  box-shadow:
+    var(--paper-inner-shadow),
+    inset 0 0 0 2px rgba(241, 210, 122, 0.16),
+    0 8px 0 rgba(92, 54, 22, 0.16),
+    0 20px 36px rgba(32, 18, 12, 0.32),
+    0 0 22px rgba(241, 210, 122, 0.22);
+}
+
 .quest-card.is-completed {
   gap: 8px;
   padding: 12px;
@@ -2306,6 +2478,19 @@ h3 {
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 6px;
+}
+
+.next-quest-label {
+  justify-self: start;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid rgba(201, 154, 53, 0.42);
+  border-radius: 999px;
+  color: var(--wood-dark);
+  background: linear-gradient(180deg, rgba(255, 235, 154, 0.9), rgba(201, 154, 53, 0.42));
+  box-shadow: 0 0 12px rgba(241, 210, 122, 0.2);
+  font-size: 0.74rem;
+  font-weight: 950;
 }
 
 .quest-card h3 {
@@ -2493,6 +2678,15 @@ h3 {
   order: 4;
   width: 100%;
   justify-self: stretch;
+}
+
+.quest-card:not(.is-completed) > .complete-button {
+  filter: brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 247, 223, 0.3),
+    0 8px 0 #5b211e,
+    0 14px 24px rgba(59, 33, 26, 0.26),
+    0 0 16px rgba(201, 154, 53, 0.16);
 }
 
 .quest-card.is-completed > .complete-button {

@@ -434,17 +434,18 @@ function updateBgmButton() {
 
 function playBgm() {
   if (!bgmEnabled) {
-    return;
+    return Promise.resolve();
   }
   const audio = getBgmAudio();
   audio.volume = BGM_VOLUME;
   const playPromise = audio.play();
   if (playPromise && typeof playPromise.catch === "function") {
-    playPromise.catch((error) => {
+    return playPromise.catch((error) => {
       console.warn("BGM再生を開始できませんでした", error);
       armBgmStartOnInteraction();
     });
   }
+  return Promise.resolve();
 }
 
 function pauseBgm() {
@@ -458,12 +459,30 @@ function armBgmStartOnInteraction() {
     return;
   }
   bgmInteractionArmed = true;
-  const start = () => {
+  const start = (event) => {
     bgmInteractionArmed = false;
+    removeBgmInteractionListeners(start);
+    if (event?.type === "keydown" && event.key === "Tab") {
+      armBgmStartOnInteraction();
+      return;
+    }
     playBgm();
   };
-  document.addEventListener("pointerdown", start, { once: true });
-  document.addEventListener("keydown", start, { once: true });
+  addBgmInteractionListeners(start);
+}
+
+function addBgmInteractionListeners(handler) {
+  document.addEventListener("pointerdown", handler, { capture: true, passive: true });
+  document.addEventListener("touchstart", handler, { capture: true, passive: true });
+  document.addEventListener("click", handler, { capture: true });
+  document.addEventListener("keydown", handler, { capture: true });
+}
+
+function removeBgmInteractionListeners(handler) {
+  document.removeEventListener("pointerdown", handler, { capture: true });
+  document.removeEventListener("touchstart", handler, { capture: true });
+  document.removeEventListener("click", handler, { capture: true });
+  document.removeEventListener("keydown", handler, { capture: true });
 }
 
 function setBgmEnabled(enabled) {
@@ -480,8 +499,8 @@ function setBgmEnabled(enabled) {
 function initializeBgm() {
   bgmEnabled = true;
   localStorage.setItem(BGM_ENABLED_KEY, "true");
-  playBgm();
   armBgmStartOnInteraction();
+  playBgm();
 }
 
 function normalizeWeeklyReportHistoryItem(rawItem) {

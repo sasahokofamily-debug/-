@@ -7,12 +7,15 @@ const ACHIEVEMENTS_KEY = "guildAchievements";
 const WEEKLY_REPORT_HISTORY_KEY = "sora_guild_app_weekly_report_history_dev";
 const PARENT_NOTES_KEY = "sora_guild_app_parent_notes_dev";
 const ONBOARDING_KEY = "hasSeenOnboarding";
+const BGM_ENABLED_KEY = "sora_guild_app_bgm_enabled_dev";
+const BGM_SRC = "assets/audio/bgm/bgm_main.mp3";
+const BGM_VOLUME = 0.24;
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
 const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
 const WEEKLY_REPORT_SENT_WEEK_KEY = "sora_guild_app_last_weekly_report_sent_week_dev";
 const isTestMode = false;
-const PARENT_PIN = "1234";
+const PARENT_PIN = "0718";
 const LOGIN_BONUS_GOLD = 10;
 const LOGIN_STREAK_BONUS_GOLD = 50;
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -55,6 +58,7 @@ const BACKUP_STORAGE_KEYS = [
   WEEKLY_REPORT_HISTORY_KEY,
   PARENT_NOTES_KEY,
   ONBOARDING_KEY,
+  BGM_ENABLED_KEY,
 ];
 
 const defaultProgress = {
@@ -278,6 +282,9 @@ let growthChartMode = "xp";
 let previousDailyRequiredComplete = false;
 let hasRenderedQuestCategoryProgress = false;
 let onboardingIndex = 0;
+let bgmEnabled = localStorage.getItem(BGM_ENABLED_KEY) === "true";
+let bgmAudio = null;
+let bgmInteractionArmed = false;
 
 function getDefaultProgressState() {
   return {
@@ -400,6 +407,81 @@ function saveParentNote(dateKey, note) {
 
 function getParentNote(dateKey = getDateKey()) {
   return loadParentNotes()[dateKey] || "";
+}
+
+function getBgmAudio() {
+  if (!bgmAudio) {
+    bgmAudio = new Audio(BGM_SRC);
+    bgmAudio.loop = true;
+    bgmAudio.volume = BGM_VOLUME;
+    bgmAudio.preload = "auto";
+    bgmAudio.addEventListener("error", () => {
+      console.warn("BGM音源を読み込めませんでした", BGM_SRC);
+    });
+  }
+  return bgmAudio;
+}
+
+function updateBgmButton() {
+  const button = document.querySelector("[data-bgm-toggle]");
+  if (!button) {
+    return;
+  }
+  button.textContent = bgmEnabled ? "BGM ON" : "BGM OFF";
+  button.setAttribute("aria-pressed", String(bgmEnabled));
+  button.classList.toggle("is-active", bgmEnabled);
+}
+
+function playBgm() {
+  if (!bgmEnabled) {
+    return;
+  }
+  const audio = getBgmAudio();
+  audio.volume = BGM_VOLUME;
+  const playPromise = audio.play();
+  if (playPromise && typeof playPromise.catch === "function") {
+    playPromise.catch((error) => {
+      console.warn("BGM再生を開始できませんでした", error);
+      armBgmStartOnInteraction();
+    });
+  }
+}
+
+function pauseBgm() {
+  if (bgmAudio) {
+    bgmAudio.pause();
+  }
+}
+
+function armBgmStartOnInteraction() {
+  if (bgmInteractionArmed || !bgmEnabled) {
+    return;
+  }
+  bgmInteractionArmed = true;
+  const start = () => {
+    bgmInteractionArmed = false;
+    playBgm();
+  };
+  document.addEventListener("pointerdown", start, { once: true });
+  document.addEventListener("keydown", start, { once: true });
+}
+
+function setBgmEnabled(enabled) {
+  bgmEnabled = enabled;
+  localStorage.setItem(BGM_ENABLED_KEY, JSON.stringify(bgmEnabled));
+  updateBgmButton();
+  if (bgmEnabled) {
+    playBgm();
+  } else {
+    pauseBgm();
+  }
+}
+
+function initializeBgm() {
+  updateBgmButton();
+  if (bgmEnabled) {
+    armBgmStartOnInteraction();
+  }
 }
 
 function normalizeWeeklyReportHistoryItem(rawItem) {
@@ -2570,25 +2652,25 @@ function renderRewardShop() {
   }
 
   list.innerHTML = "";
-  const availableRewards = rewards.filter((reward) => progress.gold >= reward.cost);
 
-  if (availableRewards.length === 0) {
+  if (rewards.length === 0) {
     const empty = document.createElement("p");
     empty.className = "reward-shop-empty";
-    empty.textContent = rewards.length === 0 ? "交換できるご褒美はまだありません。" : "いま交換できるご褒美はありません。";
+    empty.textContent = "ご褒美はまだありません。";
     list.append(empty);
     return;
   }
 
-  availableRewards.forEach((reward) => {
+  rewards.forEach((reward) => {
+    const canExchange = progress.gold >= reward.cost;
     const item = document.createElement("article");
-    item.className = "reward-shop-item";
+    item.className = `reward-shop-item${canExchange ? "" : " is-locked"}`;
     item.innerHTML = `
       <div>
         <h4>${escapeHtml(reward.name)}</h4>
-        <p>${reward.cost}Gで交換できます</p>
+        <p>${reward.cost}Gで交換${canExchange ? "できます" : `できます（あと${reward.cost - progress.gold}G）`}</p>
       </div>
-      <button type="button" data-exchange-reward="${escapeHtml(reward.id)}">交換</button>
+      <button type="button" data-exchange-reward="${escapeHtml(reward.id)}" ${canExchange ? "" : "disabled"}>${canExchange ? "交換" : "Gold不足"}</button>
     `;
     list.append(item);
   });
@@ -3758,6 +3840,12 @@ document.querySelectorAll("[data-nav-icon-image]").forEach((image) => {
 });
 
 document.addEventListener("click", (event) => {
+  const bgmToggleButton = event.target.closest("[data-bgm-toggle]");
+  if (bgmToggleButton) {
+    setBgmEnabled(!bgmEnabled);
+    return;
+  }
+
   const navButton = event.target.closest("[data-nav]");
   if (navButton) {
     if (navButton.dataset.nav === "admin" && !isParentUnlocked) {
@@ -4020,6 +4108,7 @@ if (!progress.visitedScreens.includes("home")) {
 }
 const loginBonusResult = applyLoginBonus();
 render();
+initializeBgm();
 const isOnboardingVisible = showOnboardingIfNeeded();
 if (!isOnboardingVisible) {
   window.setTimeout(showAppReminderToast, loginBonusResult.granted ? 2100 : 450);

@@ -2248,22 +2248,30 @@ h3 {
 }
 
 .quest-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .quest-title-badges {
   display: flex;
-  flex: 0 0 auto;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
 }
 
 .quest-card h3 {
   margin: 0;
+  min-width: 0;
+  color: var(--ink);
+  font-size: clamp(1.08rem, 4.7vw, 1.28rem);
+  font-weight: 950;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .quest-card p {

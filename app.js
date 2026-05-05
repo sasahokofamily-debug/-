@@ -11,7 +11,7 @@ const BGM_ENABLED_KEY = "sora_guild_app_bgm_enabled_dev";
 const BGM_SRC = "assets/audio/bgm/bgm_main.mp3";
 const BGM_VOLUME = 0.24;
 const SFX_ENABLED_KEY = "sora_guild_app_sfx_enabled_dev";
-const SFX_VOLUME = 0.55;
+const SFX_VOLUME = 0.62;
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
 const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
@@ -1725,7 +1725,7 @@ function showAchievementToast(achievements) {
   toast.classList.remove("is-visible");
   void toast.offsetWidth;
   toast.classList.add("is-visible");
-  window.setTimeout(() => playSound("achievement"), 320);
+  window.setTimeout(() => playSound("achievement"), 360);
 
   window.clearTimeout(achievementToastTimer);
   achievementToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
@@ -3429,7 +3429,7 @@ function playLevelUpAnimation() {
     characterImage.classList.add("is-level-up");
   }
   levelUpToast.classList.add("is-visible");
-  window.setTimeout(() => playSound("levelUp"), 180);
+    window.setTimeout(() => playSound("levelUp"), 240);
 
   window.clearTimeout(levelUpTimer);
   levelUpTimer = window.setTimeout(() => {

@@ -3029,7 +3029,7 @@ function renderQuests() {
           ${completed ? '<span class="status-badge">完了済み</span>' : ""}
         </div>
       </div>
-      <p>${escapeHtml(quest.description)}</p>
+      <p class="quest-description">${escapeHtml(quest.description)}</p>
       <div class="reward-row">
         <span class="reward-badge">XP +${quest.xpReward}</span>
         <span class="reward-badge">Gold +${quest.goldReward}</span>

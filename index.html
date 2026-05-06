@@ -509,6 +509,24 @@
             <button class="quest-manage-button" type="button" data-weekly-report-send>週間レポートを送信</button>
             <p class="form-message weekly-send-message" data-weekly-send-message aria-live="polite"></p>
           </section>
+          <form class="future-form pin-change-form" data-parent-mode-only data-pin-change-form aria-label="PIN変更フォーム" hidden>
+            <h3>PIN変更</h3>
+            <p>親モードに入るためのPINを変更できます。4桁の数字で設定してください。</p>
+            <label>
+              現在のPIN
+              <input type="password" name="currentPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="現在のPIN" required>
+            </label>
+            <label>
+              新しいPIN
+              <input type="password" name="newPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="4桁の数字" required>
+            </label>
+            <label>
+              新しいPIN（確認）
+              <input type="password" name="confirmPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="もう一度入力" required>
+            </label>
+            <p class="form-message" data-pin-change-message aria-live="polite"></p>
+            <button type="submit">PINを変更</button>
+          </form>
           <form class="future-form reward-create-form" data-reward-create-form aria-label="ご褒美追加フォーム">
             <h3>ご褒美追加</h3>
             <label>

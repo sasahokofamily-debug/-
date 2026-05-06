@@ -12,6 +12,7 @@ const BGM_SRC = "assets/audio/bgm/bgm_main.mp3";
 const BGM_VOLUME = 0.24;
 const SFX_ENABLED_KEY = "sora_guild_app_sfx_enabled_dev";
 const SFX_VOLUME = 0.62;
+const PARENT_PIN_KEY = "sora_guild_app_parent_pin_dev";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
 const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
@@ -62,6 +63,7 @@ const BACKUP_STORAGE_KEYS = [
   ONBOARDING_KEY,
   BGM_ENABLED_KEY,
   SFX_ENABLED_KEY,
+  PARENT_PIN_KEY,
 ];
 
 const defaultProgress = {
@@ -268,6 +270,9 @@ let questCompleteTimer;
 let loginBonusTimer;
 let appReminderTimer;
 let achievementToastTimer;
+const TOAST_DURATION = 1700;
+const LEVEL_UP_SOUND_DELAY = 240;
+const ACHIEVEMENT_SOUND_DELAY = 420;
 let pendingCompleteQuestId = "";
 let pendingCompleteSourceElement = null;
 let pendingXpAnimationStart = null;
@@ -1725,10 +1730,10 @@ function showAchievementToast(achievements) {
   toast.classList.remove("is-visible");
   void toast.offsetWidth;
   toast.classList.add("is-visible");
-  window.setTimeout(() => playSound("achievement"), 360);
+  window.setTimeout(() => playSound("achievement"), ACHIEVEMENT_SOUND_DELAY);
 
   window.clearTimeout(achievementToastTimer);
-  achievementToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2600);
+  achievementToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), TOAST_DURATION);
 }
 
 function markScreenVisited(screenId) {
@@ -2257,6 +2262,24 @@ function renderParentModeControls() {
   });
 }
 
+function getCurrentParentPin() {
+  const stored = localStorage.getItem(PARENT_PIN_KEY);
+  if (!stored) {
+    return PARENT_PIN;
+  }
+
+  try {
+    const parsed = JSON.parse(stored);
+    return typeof parsed === "string" && parsed ? parsed : PARENT_PIN;
+  } catch {
+    return stored || PARENT_PIN;
+  }
+}
+
+function saveParentPin(pin) {
+  localStorage.setItem(PARENT_PIN_KEY, JSON.stringify(pin));
+}
+
 function devLevelUp() {
   const previousLevel = getLevel(progress.xp);
   const previousLevelProgress = getLevelProgress(progress.xp);
@@ -2322,7 +2345,7 @@ function handleParentAuthSubmit(event) {
   const message = document.querySelector("[data-parent-auth-message]");
   const pin = input?.value.trim() || "";
 
-  if (pin === PARENT_PIN) {
+  if (pin === getCurrentParentPin()) {
     isParentUnlocked = true;
     isParentMode = true;
     if (message) {
@@ -2337,6 +2360,51 @@ function handleParentAuthSubmit(event) {
     message.textContent = "PINが違います";
   }
   input?.select();
+}
+
+function setPinChangeMessage(message, isError = false) {
+  const element = document.querySelector("[data-pin-change-message]");
+  if (!element) {
+    return;
+  }
+
+  element.textContent = message;
+  element.classList.toggle("is-error", isError);
+}
+
+function handlePinChangeSubmit(event) {
+  event.preventDefault();
+  if (!isParentMode) {
+    setPinChangeMessage("親モード中のみ変更できます", true);
+    return;
+  }
+
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const currentPin = String(formData.get("currentPin") || "").trim();
+  const newPin = String(formData.get("newPin") || "").trim();
+  const confirmPin = String(formData.get("confirmPin") || "").trim();
+
+  if (!currentPin || !newPin || !confirmPin) {
+    setPinChangeMessage("すべてのPINを入力してください", true);
+    return;
+  }
+  if (currentPin !== getCurrentParentPin()) {
+    setPinChangeMessage("現在のPINが違います", true);
+    return;
+  }
+  if (!/^\d{4}$/.test(newPin)) {
+    setPinChangeMessage("新しいPINは4桁の数字で入力してください", true);
+    return;
+  }
+  if (newPin !== confirmPin) {
+    setPinChangeMessage("PINが一致しません", true);
+    return;
+  }
+
+  saveParentPin(newPin);
+  form.reset();
+  setPinChangeMessage("PINを変更しました");
 }
 
 function exitParentMode() {
@@ -3444,7 +3512,7 @@ function playLevelUpAnimation() {
     characterImage.classList.add("is-level-up");
   }
   levelUpToast.classList.add("is-visible");
-    window.setTimeout(() => playSound("levelUp"), 240);
+  window.setTimeout(() => playSound("levelUp"), LEVEL_UP_SOUND_DELAY);
 
   window.clearTimeout(levelUpTimer);
   levelUpTimer = window.setTimeout(() => {
@@ -3453,7 +3521,7 @@ function playLevelUpAnimation() {
     characterFrame?.classList.remove("is-level-up");
     characterImage?.classList.remove("is-level-up");
     levelUpToast.classList.remove("is-visible");
-  }, 1250);
+  }, TOAST_DURATION);
 }
 
 function playEvolutionAnimation() {
@@ -3474,7 +3542,7 @@ function playEvolutionAnimation() {
   evolutionTimer = window.setTimeout(() => {
     toast.classList.remove("is-visible");
     document.body.classList.remove("is-evolution-flash");
-  }, 1080);
+  }, TOAST_DURATION);
 }
 
 function showRewardFeedback(quest) {
@@ -3495,10 +3563,10 @@ function showRewardFeedback(quest) {
   window.clearTimeout(rewardToastTimer);
   rewardToastTimer = window.setTimeout(() => {
     toast.classList.remove("is-visible", "is-challenge");
-  }, 1300);
+  }, TOAST_DURATION);
 }
 
-function playLoginBonusToast(message, duration = 1800) {
+function playLoginBonusToast(message, duration = TOAST_DURATION) {
   const toast = document.querySelector("[data-login-bonus-toast]");
   if (!toast) {
     return;
@@ -3530,7 +3598,7 @@ function showAppReminderToast() {
   toast.classList.add("is-visible");
 
   window.clearTimeout(appReminderTimer);
-  appReminderTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
+  appReminderTimer = window.setTimeout(() => toast.classList.remove("is-visible"), TOAST_DURATION);
 }
 
 function showLoginBonusToast(loginBonusResult) {
@@ -3539,8 +3607,8 @@ function showLoginBonusToast(loginBonusResult) {
 
   if (loginBonusResult?.streakBonus) {
     window.setTimeout(() => {
-      playLoginBonusToast(`7日連続ログイン達成！ Gold +${LOGIN_STREAK_BONUS_GOLD}`, 2000);
-    }, 1050);
+      playLoginBonusToast(`7日連続ログイン達成！ Gold +${LOGIN_STREAK_BONUS_GOLD}`);
+    }, TOAST_DURATION);
   }
 }
 
@@ -3595,7 +3663,7 @@ function showClearFeedback() {
   toast.classList.add("is-visible");
 
   window.clearTimeout(clearToastTimer);
-  clearToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1050);
+  clearToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), TOAST_DURATION);
 }
 
 function renderGrowthRecord(level, title) {
@@ -4177,6 +4245,7 @@ document.querySelector("[data-screen='quests']")?.addEventListener(
 );
 
 document.querySelector("[data-parent-auth-form]")?.addEventListener("submit", handleParentAuthSubmit);
+document.querySelector("[data-pin-change-form]")?.addEventListener("submit", handlePinChangeSubmit);
 document.querySelector("[data-quest-create-form]")?.addEventListener("submit", handleQuestCreateSubmit);
 document.querySelector("[data-reward-create-form]")?.addEventListener("submit", handleRewardCreateSubmit);
 document.querySelector("[data-parent-note-form]")?.addEventListener("submit", handleParentNoteSubmit);

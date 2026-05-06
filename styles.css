@@ -8,6 +8,9 @@
   --wood-dark: #3b211a;
   --gold: #c99a35;
   --gold-light: #f1d27a;
+  --effect-gold: #c99a35;
+  --effect-gold-light: #f1d27a;
+  --success-accent: #8f2f2a;
   --red: #8e2f2a;
   --navy: #172a45;
   --cream: #fff7df;
@@ -682,7 +685,7 @@ h3 {
 }
 
 .level-up-toast.is-visible {
-  animation: levelToast 1240ms ease both;
+  animation: guildToast 1700ms ease both;
 }
 
 .clear-toast {
@@ -706,7 +709,7 @@ h3 {
 }
 
 .clear-toast.is-visible {
-  animation: clearToast 1020ms ease both;
+  animation: guildToast 1700ms ease both;
 }
 
 .evolution-toast {
@@ -729,7 +732,7 @@ h3 {
 }
 
 .evolution-toast.is-visible {
-  animation: evolutionToast 1040ms ease both;
+  animation: guildToast 1700ms ease both;
 }
 
 .xp-panel.is-level-up {
@@ -2829,7 +2832,7 @@ h3 {
 }
 
 .reward-toast.is-visible {
-  animation: rewardToast 1050ms ease both;
+  animation: guildToast 1700ms ease both;
 }
 
 .reward-toast.is-challenge {
@@ -2862,7 +2865,7 @@ h3 {
 }
 
 .app-reminder-toast.is-visible {
-  animation: loginBonusToast 1600ms ease both;
+  animation: guildToast 1700ms ease both;
 }
 
 .login-bonus-toast {
@@ -2891,7 +2894,7 @@ h3 {
 }
 
 .login-bonus-toast.is-visible {
-  animation: loginBonusToast 1600ms ease both;
+  animation: guildToast 1700ms ease both;
 }
 
 .achievement-toast {
@@ -2920,7 +2923,89 @@ h3 {
 }
 
 .achievement-toast.is-visible {
-  animation: achievementToast 2400ms ease both;
+  animation: guildToast 1700ms ease both;
+}
+
+.level-up-toast,
+.clear-toast,
+.evolution-toast,
+.reward-toast,
+.app-reminder-toast,
+.login-bonus-toast,
+.achievement-toast {
+  position: fixed;
+  top: calc(18px + env(safe-area-inset-top));
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  z-index: 24;
+  max-width: calc(100% - 32px);
+  padding: 11px 16px;
+  border: 1px solid rgba(241, 210, 122, 0.68);
+  border-radius: 999px;
+  color: var(--wood-dark);
+  background:
+    linear-gradient(180deg, rgba(255, 247, 223, 0.26), transparent 42%),
+    linear-gradient(180deg, var(--effect-gold-light), var(--effect-gold));
+  box-shadow:
+    0 10px 24px rgba(48, 29, 20, 0.28),
+    0 0 18px rgba(241, 210, 122, 0.3);
+  font-size: 0.88rem;
+  font-weight: 950;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, -10px) scale(0.96);
+  white-space: normal;
+}
+
+.level-up-toast,
+.clear-toast,
+.evolution-toast {
+  padding: 12px 18px;
+  font-size: 1rem;
+}
+
+.reward-toast.is-challenge {
+  color: var(--wood-dark);
+  background:
+    linear-gradient(180deg, rgba(255, 247, 223, 0.24), transparent 42%),
+    linear-gradient(180deg, var(--effect-gold-light), var(--effect-gold));
+  box-shadow:
+    0 10px 24px rgba(48, 29, 20, 0.28),
+    0 0 18px rgba(241, 210, 122, 0.3);
+}
+
+.level-up-toast.is-visible,
+.clear-toast.is-visible,
+.evolution-toast.is-visible,
+.reward-toast.is-visible,
+.app-reminder-toast.is-visible,
+.login-bonus-toast.is-visible,
+.achievement-toast.is-visible {
+  animation: guildToast 1700ms ease both;
+}
+
+.recent-achievement-card,
+.achievement-card {
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+
+.quest-card:not(.is-completed):active,
+.reward-shop-item.is-available:active,
+.recent-achievement-card:active,
+.achievement-card:active {
+  transform: scale(1.015);
+}
+
+@media (hover: hover) {
+  .quest-card:not(.is-completed):hover,
+  .reward-shop-item.is-available:hover,
+  .recent-achievement-card:hover,
+  .achievement-card:hover {
+    transform: scale(1.01);
+  }
 }
 
 .complete-confirm {
@@ -3124,6 +3209,28 @@ h3 {
 .onboarding-actions button:active,
 .onboarding-skip:active {
   transform: translateY(2px);
+}
+
+@keyframes guildToast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(0.96);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.03);
+  }
+
+  78% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.98);
+  }
 }
 
 @keyframes rewardToast {
@@ -3969,6 +4076,18 @@ h3 {
   line-height: 1.65;
 }
 
+.pin-change-form p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.pin-change-form input {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .backup-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4079,6 +4198,10 @@ h3 {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.form-message.is-error {
+  color: var(--red);
 }
 
 .managed-quest-list {

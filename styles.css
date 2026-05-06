@@ -739,6 +739,116 @@ h3 {
   animation: guildToast 1700ms ease both;
 }
 
+.evolution-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 28;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(241, 210, 122, 0.34), transparent 18rem),
+    rgba(32, 18, 12, 0.42);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.evolution-modal[hidden] {
+  display: none;
+}
+
+.evolution-modal.is-visible {
+  animation: evolutionModalFade 1850ms ease both;
+}
+
+.evolution-modal-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(300px, 88vw);
+  padding: 22px 20px 20px;
+  border: 1px solid rgba(241, 210, 122, 0.82);
+  border-radius: 14px;
+  color: var(--wood-dark);
+  background:
+    radial-gradient(circle at 50% 8%, rgba(255, 247, 223, 0.78), transparent 8rem),
+    var(--parchment-card-bg);
+  box-shadow:
+    var(--paper-inner-shadow),
+    0 22px 42px rgba(32, 18, 12, 0.42),
+    0 0 36px rgba(241, 210, 122, 0.34);
+  overflow: hidden;
+  transform: scale(0.94);
+}
+
+.evolution-modal.is-visible .evolution-modal-card {
+  animation: evolutionModalCard 1850ms ease both;
+}
+
+.evolution-modal-image {
+  width: min(172px, 58vw);
+  height: 216px;
+  margin: 4px 0 10px;
+  object-fit: contain;
+  object-position: center top;
+  filter:
+    drop-shadow(0 14px 14px rgba(48, 29, 20, 0.3))
+    drop-shadow(0 0 12px rgba(241, 210, 122, 0.32));
+}
+
+.evolution-modal-card strong {
+  color: var(--red);
+  font-size: 1.78rem;
+  font-weight: 950;
+  line-height: 1.1;
+  text-shadow: 0 2px 0 rgba(255, 247, 223, 0.62);
+}
+
+.evolution-modal-card span[data-evolution-modal-stage] {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.evolution-spark {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--gold-light);
+  box-shadow: 0 0 14px rgba(241, 210, 122, 0.9);
+  opacity: 0;
+}
+
+.evolution-spark-a {
+  top: 24%;
+  left: 18%;
+}
+
+.evolution-spark-b {
+  top: 20%;
+  right: 20%;
+}
+
+.evolution-spark-c {
+  right: 25%;
+  bottom: 28%;
+}
+
+.evolution-modal.is-visible .evolution-spark {
+  animation: evolutionSpark 950ms ease-in-out 180ms both;
+}
+
+.evolution-modal.is-visible .evolution-spark-b {
+  animation-delay: 330ms;
+}
+
+.evolution-modal.is-visible .evolution-spark-c {
+  animation-delay: 500ms;
+}
+
 .xp-panel.is-level-up {
   animation: levelUpPulse 980ms ease both;
 }
@@ -1900,6 +2010,60 @@ h3 {
   100% {
     opacity: 0;
     transform: translate(-50%, -18px) scale(0.98);
+  }
+}
+
+@keyframes evolutionModalFade {
+  0% {
+    opacity: 0;
+  }
+
+  14%,
+  78% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes evolutionModalCard {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+  }
+
+  22% {
+    opacity: 1;
+    transform: translateY(0) scale(1.04);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes evolutionSpark {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.5);
+  }
+
+  42% {
+    opacity: 1;
+    transform: translateY(0) scale(1.25);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.72);
   }
 }
 

@@ -88,6 +88,9 @@ const defaultProgress = {
   loginStreak: 0,
   totalLoginDays: 0,
   totalGoldEarned: 0,
+  totalQuestCompletions: 0,
+  totalDailyRequiredCompletions: 0,
+  totalChallengeCompletions: 0,
   questCompletedWeekdays: [],
   visitedScreens: [],
 };
@@ -357,6 +360,19 @@ function loadProgress() {
             Array.isArray(parsed.activityLog) ? parsed.activityLog.length : 0,
             Array.isArray(parsed.completedQuestIds) ? parsed.completedQuestIds.length : 0,
           ),
+      totalDailyRequiredCompletions: Number.isFinite(parsed.totalDailyRequiredCompletions)
+        ? Math.max(0, Math.round(parsed.totalDailyRequiredCompletions))
+        : Math.max(
+            Array.isArray(parsed.activityLog)
+              ? parsed.activityLog.filter((item) => normalizeQuestCategory(item.category) === "daily_required").length
+              : 0,
+            Number.isFinite(parsed.totalQuestCompletions) ? Math.max(0, Math.round(parsed.totalQuestCompletions)) : 0,
+          ),
+      totalChallengeCompletions: Number.isFinite(parsed.totalChallengeCompletions)
+        ? Math.max(0, Math.round(parsed.totalChallengeCompletions))
+        : Array.isArray(parsed.activityLog)
+          ? parsed.activityLog.filter((item) => normalizeQuestCategory(item.category) === "challenge").length
+          : 0,
       questCompletedWeekdays: normalizeNumberList(parsed.questCompletedWeekdays, 0, 6),
       visitedScreens: normalizeStringList(parsed.visitedScreens),
     };
@@ -367,6 +383,10 @@ function loadProgress() {
 
 function normalizeStringList(rawList) {
   return Array.isArray(rawList) ? [...new Set(rawList.map(String).filter(Boolean))] : [];
+}
+
+function normalizeQuestCategory(category) {
+  return ["daily_required", "challenge"].includes(category) ? category : "daily_required";
 }
 
 function normalizeNumberList(rawList, min, max) {
@@ -660,6 +680,14 @@ function reconcileProgressFromHistory(currentProgress) {
       currentProgress.activityLog.length,
       currentProgress.completedQuestIds.length,
     ),
+    totalDailyRequiredCompletions: Math.max(
+      currentProgress.totalDailyRequiredCompletions || 0,
+      currentProgress.activityLog.filter((item) => normalizeQuestCategory(item.category) === "daily_required").length,
+    ),
+    totalChallengeCompletions: Math.max(
+      currentProgress.totalChallengeCompletions || 0,
+      currentProgress.activityLog.filter((item) => normalizeQuestCategory(item.category) === "challenge").length,
+    ),
     questCompletedWeekdays: normalizeNumberList(currentProgress.questCompletedWeekdays, 0, 6),
     visitedScreens: normalizeStringList(currentProgress.visitedScreens),
   };
@@ -823,6 +851,7 @@ function normalizeActivityLogItem(rawItem) {
   const goldReward = Number(rawItem.goldReward);
   const completedAt = typeof rawItem.completedAt === "string" ? rawItem.completedAt : new Date().toISOString();
   const stat = ["STR", "INT", "END", "DEX"].includes(rawItem.stat) ? rawItem.stat : inferQuestStat({ title: questTitle });
+  const category = normalizeQuestCategory(rawItem.category);
 
   if (!questTitle || !Number.isFinite(xpReward) || !Number.isFinite(goldReward)) {
     return null;
@@ -837,6 +866,7 @@ function normalizeActivityLogItem(rawItem) {
     dateKey: typeof rawItem.dateKey === "string" ? rawItem.dateKey : getDateKey(new Date(completedAt)),
     completedHour: Number.isFinite(rawItem.completedHour) ? Math.max(0, Math.min(23, Math.round(rawItem.completedHour))) : getJapanHour(new Date(completedAt)),
     stat,
+    category,
   };
 }
 
@@ -1598,8 +1628,10 @@ function getEstimatedQuestCountToLevel(xp) {
 function makeAchievement(id, name, description, conditionText, icon, isUnlocked, getProgress = null) {
   return {
     id,
+    title: name,
     name,
     description,
+    condition: conditionText,
     conditionText,
     icon,
     isUnlocked,
@@ -1607,77 +1639,157 @@ function makeAchievement(id, name, description, conditionText, icon, isUnlocked,
   };
 }
 
-const questAchievementData = [
-  ["quest-1", "はじめの一歩", 1],
-  ["quest-10", "駆け出しの旅人", 10],
-  ["quest-50", "努力の星", 50],
-  ["quest-100", "百の依頼を越えて", 100],
-  ["quest-300", "こつこつ勇者", 300],
-];
-
-const questStreakAchievementData = [
-  ["quest-streak-3", "3日の足あと", 3],
-  ["quest-streak-7", "7日続いた冒険", 7],
-  ["quest-streak-14", "2週間の努力家", 14],
-  ["quest-streak-30", "30日の守り手", 30],
-];
-
-const loginStreakAchievementData = [
-  ["login-streak-3", "3日続いた旅", 3],
-  ["login-streak-7", "7日連続の勇者", 7],
-  ["login-streak-30", "30日の守り人", 30],
-];
-
-const rewardAchievementData = [
-  ["reward-1", "はじめての交換", 1],
-  ["reward-5", "ご褒美ハンター", 5],
-  ["reward-10", "交換の達人", 10],
-];
+function makeMilestoneAchievements({ prefix, milestones, names, description, conditionLabel, icon, getCurrent, unit }) {
+  return milestones.map((target, index) =>
+    makeAchievement(
+      `${prefix}-${target}`,
+      names[index],
+      description,
+      `${conditionLabel}${target}${unit}`,
+      icon,
+      (ctx) => getCurrent(ctx) >= target,
+      (ctx) => ({ current: getCurrent(ctx), target, unit }),
+    ),
+  );
+}
 
 const ACHIEVEMENTS = [
-  ...questAchievementData.map(([id, name, count]) =>
+  ...makeMilestoneAchievements({
+    prefix: "quest",
+    milestones: [1, 5, 10, 30, 50, 100, 200, 300, 500, 1000],
+    names: ["最初の依頼", "五つの任務", "十の足あと", "依頼三十番", "努力の星", "百の依頼", "二百の記録", "こつこつ勇者", "ギルドの柱", "千の伝説"],
+    description: "クエスト達成を積み重ねた証",
+    conditionLabel: "クエスト達成 ",
+    icon: "📜",
+    getCurrent: (ctx) => ctx.questTotal,
+    unit: "回",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "daily",
+    milestones: [1, 3, 7, 14, 30, 60, 100, 200],
+    names: ["今日の任務完了", "三日の任務", "一週間の任務", "二週間の努力", "一ヶ月の守り手", "六十日の習慣", "百日の任務録", "二百日の誓い"],
+    description: "毎日クエストをやり遂げた証",
+    conditionLabel: "毎日クエスト達成 ",
+    icon: "🛡️",
+    getCurrent: (ctx) => ctx.dailyRequiredTotal,
+    unit: "日",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "challenge",
+    milestones: [1, 5, 10, 30, 50, 100, 200],
+    names: ["追加依頼の一歩", "小さな助っ人", "挑戦十番", "頼れる助っ人", "追加依頼の名手", "百の挑戦", "挑戦の達人"],
+    description: "チャレンジクエストへ挑戦した証",
+    conditionLabel: "チャレンジ達成 ",
+    icon: "⚔️",
+    getCurrent: (ctx) => ctx.challengeTotal,
+    unit: "回",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "login-streak",
+    milestones: [3, 7, 14, 30, 60, 100, 200],
+    names: ["三日通い", "七日の帰還", "二週間の旅", "三十日の常連", "六十日の仲間", "百日の冒険者", "二百日の守護者"],
+    description: "アプリを続けて開いた証",
+    conditionLabel: "連続ログイン ",
+    icon: "🏰",
+    getCurrent: (ctx) => ctx.loginStreak,
+    unit: "日",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "reward",
+    milestones: [1, 3, 5, 10, 20, 30, 50],
+    names: ["はじめての交換", "楽しみ三つ", "ご褒美ハンター", "交換の達人", "願いの集め手", "楽しみ上手", "願いを叶える者"],
+    description: "Goldをご褒美に交換した証",
+    conditionLabel: "ご褒美交換 ",
+    icon: "🎁",
+    getCurrent: (ctx) => ctx.rewardExchangeCount,
+    unit: "回",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "gold",
+    milestones: [100, 500, 1000, 3000, 5000, 10000],
+    names: ["金貨の袋", "小さな宝箱", "千の金貨", "金貨の旅商人", "黄金ギルドの仲間", "金貨王の貯蔵庫"],
+    description: "Goldを集めた証",
+    conditionLabel: "累計Gold ",
+    icon: "🪙",
+    getCurrent: (ctx) => ctx.totalGoldEarned,
+    unit: "G",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "xp",
+    milestones: [100, 500, 1000, 3000, 5000, 10000],
+    names: ["はじめての経験", "小さな成長", "学びの光", "努力の結晶", "成長の証", "経験の旅人"],
+    description: "経験値を積み重ねた証",
+    conditionLabel: "累計XP ",
+    icon: "✨",
+    getCurrent: (ctx) => ctx.xp,
+    unit: "XP",
+  }),
+  ...["STR", "INT", "END", "DEX"].flatMap((stat) =>
+    makeMilestoneAchievements({
+      prefix: `stat-${stat.toLowerCase()}`,
+      milestones: [10, 30, 50, 100, 200],
+      names: {
+        STR: ["力の芽生え", "力自慢", "剛腕の冒険者", "力の守護者", "伝説の力"],
+        INT: ["賢さの芽生え", "ひらめき名人", "知恵の探検家", "賢者の書庫", "伝説の知恵"],
+        END: ["忍耐の芽生え", "あきらめない心", "粘り強き勇者", "継続の守護者", "伝説の忍耐"],
+        DEX: ["器用さの芽生え", "手先の名人", "技の冒険者", "工夫の職人", "伝説の技"],
+      }[stat],
+      description: `${getStatLabel(stat)}を伸ばした証`,
+      conditionLabel: `${getStatLabel(stat)} `,
+      icon: { STR: "💪", INT: "📘", END: "🌿", DEX: "🔧" }[stat],
+      getCurrent: (ctx) => ctx.stats[stat] || 0,
+      unit: "",
+    }),
+  ),
+  ...makeMilestoneAchievements({
+    prefix: "weekly-report",
+    milestones: [1, 4, 8, 12, 24],
+    names: ["はじめての週報", "一ヶ月の記録", "八週の足あと", "三ヶ月の冒険録", "半年の記録者"],
+    description: "週間レポートを積み上げた証",
+    conditionLabel: "週間レポート ",
+    icon: "📚",
+    getCurrent: (ctx) => ctx.weeklyReportCount,
+    unit: "週",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "level",
+    milestones: [2, 5, 10, 20, 30, 50, 75, 100],
+    names: ["レベルアップの音", "ぐんぐん成長", "若き冒険者", "中堅ギルド員", "頼れる先輩", "熟練の冒険者", "英雄候補", "伝説の入口"],
+    description: "レベルが上がった証",
+    conditionLabel: "Lv",
+    icon: "⭐",
+    getCurrent: (ctx) => ctx.level,
+    unit: "",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "login-total",
+    milestones: [1, 5, 10, 30, 60, 100, 200, 365],
+    names: ["はじめてのログイン", "いつもの顔", "常連見習い", "毎日の仲間", "季節の旅人", "百日の訪問者", "長旅の仲間", "年間冒険者"],
+    description: "アプリを開き続けた証",
+    conditionLabel: "累計ログイン ",
+    icon: "🚪",
+    getCurrent: (ctx) => ctx.totalLoginDays,
+    unit: "日",
+  }),
+  ...[1, 2, 3, 4, 5, 6, 0].map((weekday) =>
     makeAchievement(
-      id,
-      name,
-      "クエスト達成を積み重ねた証",
-      `クエスト${count}回達成`,
-      "📜",
-      (ctx) => ctx.questTotal >= count,
-      (ctx) => ({ current: ctx.questTotal, target: count, unit: "回" }),
+      `weekday-${weekday}`,
+      `${WEEKDAY_LABELS[weekday]}曜の冒険者`,
+      `${WEEKDAY_LABELS[weekday]}曜日にもクエストを達成した証`,
+      `${WEEKDAY_LABELS[weekday]}曜日にクエスト達成`,
+      "🗓️",
+      (ctx) => ctx.questWeekdays.includes(weekday),
+      (ctx) => ({ current: ctx.questWeekdays.includes(weekday) ? 1 : 0, target: 1, unit: "回" }),
     ),
   ),
-  ...questStreakAchievementData.map(([id, name, days]) =>
-    makeAchievement(
-      id,
-      name,
-      "毎日クエストを続けた証",
-      `${days}日連続達成`,
-      "🔥",
-      (ctx) => ctx.questStreak >= days,
-      (ctx) => ({ current: ctx.questStreak, target: days, unit: "日" }),
-    ),
-  ),
-  ...loginStreakAchievementData.map(([id, name, days]) =>
-    makeAchievement(
-      id,
-      name,
-      "毎日ギルドへ通った証",
-      `${days}日連続ログイン`,
-      "🏰",
-      (ctx) => ctx.loginStreak >= days,
-      (ctx) => ({ current: ctx.loginStreak, target: days, unit: "日" }),
-    ),
-  ),
-  ...rewardAchievementData.map(([id, name, count]) =>
-    makeAchievement(
-      id,
-      name,
-      "ご褒美を目標にがんばった証",
-      `ご褒美を${count}回交換`,
-      "🎁",
-      (ctx) => ctx.rewardExchangeCount >= count,
-      (ctx) => ({ current: ctx.rewardExchangeCount, target: count, unit: "回" }),
-    ),
+  makeAchievement(
+    "weekday-all",
+    "一週間制覇",
+    "月曜から日曜まで、すべての曜日で達成した証",
+    "全曜日でクエスト達成",
+    "🏆",
+    (ctx) => ctx.questWeekdays.length >= 7,
+    (ctx) => ({ current: ctx.questWeekdays.length, target: 7, unit: "曜" }),
   ),
 ];
 
@@ -1698,6 +1810,14 @@ function getAchievementContext() {
   );
   const questWeekdays = normalizeNumberList(progress.questCompletedWeekdays, 0, 6);
   const totalGoldEarned = Math.max(progress.totalGoldEarned || 0, progress.gold || 0);
+  const dailyRequiredTotal = Math.max(
+    progress.totalDailyRequiredCompletions || 0,
+    progress.activityLog.filter((item) => normalizeQuestCategory(item.category) === "daily_required").length,
+  );
+  const challengeTotal = Math.max(
+    progress.totalChallengeCompletions || 0,
+    progress.activityLog.filter((item) => normalizeQuestCategory(item.category) === "challenge").length,
+  );
   const recentQuestCount = (days) =>
     progress.activityLog.filter((item) => {
       const diff = getDayDifference(item.dateKey, getDateKey());
@@ -1706,6 +1826,8 @@ function getAchievementContext() {
 
   return {
     questTotal,
+    dailyRequiredTotal,
+    challengeTotal,
     questStreak: progress.streak?.current || 0,
     loginStreak: progress.loginStreak || 0,
     totalLoginDays: progress.totalLoginDays || 0,
@@ -1714,6 +1836,7 @@ function getAchievementContext() {
     rewardExchangeCount: rewardHistory.length,
     level: getLevel(progress.xp),
     stats,
+    weeklyReportCount: weeklyReportHistory.length,
     questWeekdays,
     todayCompleted: todayGrowth.completed,
     hasMorningQuest: progress.activityLog.some((item) => item.completedHour < 12),
@@ -1863,6 +1986,10 @@ function completeQuest(questId, sourceElement) {
     gold: progress.gold + quest.goldReward,
     totalGoldEarned: Math.max(0, progress.totalGoldEarned || progress.gold || 0) + quest.goldReward,
     totalQuestCompletions: Math.max(0, progress.totalQuestCompletions || 0) + 1,
+    totalDailyRequiredCompletions:
+      Math.max(0, progress.totalDailyRequiredCompletions || 0) + (quest.category === "daily_required" ? 1 : 0),
+    totalChallengeCompletions:
+      Math.max(0, progress.totalChallengeCompletions || 0) + (quest.category === "challenge" ? 1 : 0),
     questCompletedWeekdays: [...new Set([...normalizeNumberList(progress.questCompletedWeekdays, 0, 6), completedWeekday])].sort((a, b) => a - b),
     stats: {
       ...currentStats,
@@ -1880,6 +2007,7 @@ function completeQuest(questId, sourceElement) {
         dateKey: getDateKey(completedAt),
         completedHour,
         stat: quest.stat,
+        category: quest.category,
       },
       ...progress.activityLog,
     ].slice(0, 50),
@@ -1982,6 +2110,10 @@ function undoQuestCompletion(questId) {
     gold: Math.max(0, progress.gold - quest.goldReward),
     totalGoldEarned: Math.max(0, (progress.totalGoldEarned || 0) - quest.goldReward),
     totalQuestCompletions: Math.max(0, (progress.totalQuestCompletions || 0) - 1),
+    totalDailyRequiredCompletions:
+      Math.max(0, (progress.totalDailyRequiredCompletions || 0) - (quest.category === "daily_required" ? 1 : 0)),
+    totalChallengeCompletions:
+      Math.max(0, (progress.totalChallengeCompletions || 0) - (quest.category === "challenge" ? 1 : 0)),
     questCompletedWeekdays: nextWeekdays,
     stats: {
       ...currentStats,
@@ -3575,23 +3707,48 @@ function playLevelUpAnimation() {
 
 function playEvolutionAnimation() {
   const toast = document.querySelector("[data-evolution-toast]");
-  if (!toast) {
+  const modal = document.querySelector("[data-evolution-modal]");
+  const modalImage = document.querySelector("[data-evolution-modal-image]");
+  const modalTitle = document.querySelector("[data-evolution-modal-title]");
+  const modalStage = document.querySelector("[data-evolution-modal-stage]");
+  if (!toast || !modal) {
     return;
   }
 
   const messages = ["進化！", "ランクアップ！"];
-  toast.textContent = messages[getLevel(progress.xp) % messages.length];
+  const level = getLevel(progress.xp);
+  const message = messages[level % messages.length];
+  const imageSrc = getCharacterImageCandidatesForLevel(level)[0];
+
+  toast.textContent = message;
+  if (modalTitle) {
+    modalTitle.textContent = message;
+  }
+  if (modalStage) {
+    modalStage.textContent = `${getCharacterEvolutionLabel(level)}へ進化しました`;
+  }
+  if (modalImage) {
+    modalImage.hidden = false;
+    modalImage.src = imageSrc;
+  }
+
+  modal.hidden = false;
+  modal.classList.remove("is-visible");
   toast.classList.remove("is-visible");
   document.body.classList.remove("is-evolution-flash");
-  void toast.offsetWidth;
+  void modal.offsetWidth;
+  modal.classList.add("is-visible");
   toast.classList.add("is-visible");
   document.body.classList.add("is-evolution-flash");
+  window.setTimeout(() => playSound("achievement"), 220);
 
   window.clearTimeout(evolutionTimer);
   evolutionTimer = window.setTimeout(() => {
+    modal.classList.remove("is-visible");
+    modal.hidden = true;
     toast.classList.remove("is-visible");
     document.body.classList.remove("is-evolution-flash");
-  }, TOAST_DURATION);
+  }, 1850);
 }
 
 function showRewardFeedback(quest) {
@@ -4024,6 +4181,10 @@ document.querySelector("[data-character-image]")?.addEventListener("error", (eve
 
   image.hidden = true;
   image.closest(".character-frame")?.classList.remove("has-character-image");
+});
+
+document.querySelector("[data-evolution-modal-image]")?.addEventListener("error", (event) => {
+  event.currentTarget.hidden = true;
 });
 
 document.querySelectorAll("[data-nav-icon-image]").forEach((image) => {

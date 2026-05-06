@@ -8,8 +8,8 @@ const WEEKLY_REPORT_HISTORY_KEY = "sora_guild_app_weekly_report_history_dev";
 const PARENT_NOTES_KEY = "sora_guild_app_parent_notes_dev";
 const ONBOARDING_KEY = "hasSeenOnboarding";
 const BGM_ENABLED_KEY = "sora_guild_app_bgm_enabled_dev";
-const BGM_SRC = "assets/audio/bgm/bgm_main.mp3";
-const BGM_VOLUME = 0.24;
+const BGM_SRC = "./assets/audio/bgm/bgm_main.mp3";
+const BGM_VOLUME = 0.34;
 const SFX_ENABLED_KEY = "sora_guild_app_sfx_enabled_dev";
 const SFX_VOLUME = 0.62;
 const PARENT_PIN_KEY = "sora_guild_app_parent_pin_dev";
@@ -302,14 +302,15 @@ let onboardingIndex = 0;
 let bgmEnabled = true;
 let bgmAudio = null;
 let bgmInteractionArmed = false;
+let sfxInteractionPrimed = false;
 let sfxEnabled = localStorage.getItem(SFX_ENABLED_KEY) !== "false";
 const sounds = {
-  tab: new Audio("assets/audio/sfx/sfx_tab.mp3"),
-  gold: new Audio("assets/audio/sfx/sfx_gold.mp3"),
-  achievement: new Audio("assets/audio/sfx/sfx_achievement.mp3"),
-  levelUp: new Audio("assets/audio/sfx/sfx_level_up.mp3"),
-  questComplete: new Audio("assets/audio/sfx/sfx_quest_complete.mp3"),
-  rewardOpen: new Audio("assets/audio/sfx/sfx_reward_open.mp3"),
+  tab: new Audio("./assets/audio/sfx/sfx_tab.mp3"),
+  gold: new Audio("./assets/audio/sfx/sfx_gold.mp3"),
+  achievement: new Audio("./assets/audio/sfx/sfx_achievement.mp3"),
+  levelUp: new Audio("./assets/audio/sfx/sfx_level_up.mp3"),
+  questComplete: new Audio("./assets/audio/sfx/sfx_quest_complete.mp3"),
+  rewardOpen: new Audio("./assets/audio/sfx/sfx_reward_open.mp3"),
 };
 
 function getDefaultProgressState() {
@@ -441,21 +442,77 @@ function getBgmAudio() {
     bgmAudio.loop = true;
     bgmAudio.volume = BGM_VOLUME;
     bgmAudio.preload = "auto";
+    bgmAudio.addEventListener("playing", () => updateBgmButton(false));
     bgmAudio.addEventListener("error", () => {
       console.warn("BGM音源を読み込めませんでした", BGM_SRC);
+      updateBgmButton(true);
     });
   }
   return bgmAudio;
 }
 
-function updateBgmButton() {
+function updateBgmButton(needsStart = false) {
   const button = document.querySelector("[data-bgm-toggle]");
   if (!button) {
     return;
   }
-  button.textContent = bgmEnabled ? "BGM ON" : "BGM OFF";
-  button.setAttribute("aria-pressed", String(bgmEnabled));
-  button.classList.toggle("is-active", bgmEnabled);
+  const shouldShow = bgmEnabled && needsStart;
+  button.hidden = !shouldShow;
+  button.textContent = "BGMを再生";
+  button.setAttribute("aria-pressed", String(!shouldShow));
+  button.classList.toggle("is-active", shouldShow);
+}
+
+function preloadAudioAssets() {
+  try {
+    getBgmAudio().load();
+  } catch (error) {
+    console.warn("BGMの事前読み込みに失敗しました", error);
+  }
+
+  Object.values(sounds).forEach((sound) => {
+    try {
+      sound.load();
+    } catch (error) {
+      console.warn("効果音の事前読み込みに失敗しました", error);
+    }
+  });
+}
+
+function primeSfxOnInteraction() {
+  if (sfxInteractionPrimed || !sfxEnabled) {
+    return;
+  }
+
+  const sound = sounds.tab;
+  if (!sound) {
+    return;
+  }
+
+  sfxInteractionPrimed = true;
+  const originalVolume = sound.volume;
+  try {
+    sound.volume = 0;
+    sound.currentTime = 0;
+    const playPromise = sound.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise
+        .then(() => {
+          sound.pause();
+          sound.currentTime = 0;
+          sound.volume = originalVolume;
+        })
+        .catch(() => {
+          sound.volume = originalVolume;
+        });
+    } else {
+      sound.pause();
+      sound.currentTime = 0;
+      sound.volume = originalVolume;
+    }
+  } catch {
+    sound.volume = originalVolume;
+  }
 }
 
 function playBgm() {
@@ -468,6 +525,7 @@ function playBgm() {
   if (playPromise && typeof playPromise.catch === "function") {
     return playPromise.catch((error) => {
       console.warn("BGM再生を開始できませんでした", error);
+      updateBgmButton(true);
       armBgmStartOnInteraction();
     });
   }
@@ -492,6 +550,7 @@ function armBgmStartOnInteraction() {
       armBgmStartOnInteraction();
       return;
     }
+    primeSfxOnInteraction();
     playBgm();
   };
   addBgmInteractionListeners(start);
@@ -514,7 +573,7 @@ function removeBgmInteractionListeners(handler) {
 function setBgmEnabled(enabled) {
   bgmEnabled = enabled;
   localStorage.setItem(BGM_ENABLED_KEY, JSON.stringify(bgmEnabled));
-  updateBgmButton();
+  updateBgmButton(false);
   if (bgmEnabled) {
     playBgm();
   } else {
@@ -525,6 +584,7 @@ function setBgmEnabled(enabled) {
 function initializeBgm() {
   bgmEnabled = true;
   localStorage.setItem(BGM_ENABLED_KEY, "true");
+  preloadAudioAssets();
   armBgmStartOnInteraction();
   playBgm();
 }
@@ -535,6 +595,11 @@ Object.entries(sounds).forEach(([name, sound]) => {
   sound.addEventListener("error", () => {
     console.warn(`効果音を読み込めませんでした: ${name}`);
   });
+  try {
+    sound.load();
+  } catch {
+    // Audio preload can fail silently on some mobile browsers.
+  }
 });
 
 function playSound(name) {
@@ -546,7 +611,6 @@ function playSound(name) {
     return;
   }
   try {
-    sound.pause();
     sound.currentTime = 0;
     sound.volume = SFX_VOLUME;
     const playPromise = sound.play();
@@ -3996,6 +4060,12 @@ document.querySelectorAll("[data-nav-icon-image]").forEach((image) => {
 });
 
 document.addEventListener("click", (event) => {
+  const bgmStartButton = event.target.closest("[data-bgm-toggle]");
+  if (bgmStartButton) {
+    setBgmEnabled(true);
+    return;
+  }
+
   const navButton = event.target.closest("[data-nav]");
   if (navButton) {
     if (navButton.dataset.nav === "admin" && !isParentUnlocked) {

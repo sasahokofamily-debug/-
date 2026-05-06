@@ -261,6 +261,7 @@ const characterEvolutionStages = [
   { stage: 4, minLevel: 50, maxLevel: 74, label: "熟練冒険者" },
   { stage: 5, minLevel: 75, maxLevel: 100, label: "伝説の冒険者" },
 ];
+const characterImageStages = [1, 3, 5];
 
 let progress = loadProgress();
 let managedQuests = loadManagedQuests();
@@ -1370,7 +1371,11 @@ function getNextEvolutionLabel(level) {
 
 function getCharacterImagePath(level, stats) {
   const stage = getCharacterEvolutionStage(level);
-  return `assets/characters/${getCharacterClass(stats)}-stage-${stage.stage}.png`;
+  return `./assets/characters/${getCharacterClass(stats)}-stage-${stage.stage}.png`;
+}
+
+function getFallbackCharacterImageStages(stage) {
+  return characterImageStages.filter((imageStage) => imageStage <= stage).sort((a, b) => b - a);
 }
 
 function escapeHtml(value) {
@@ -1771,15 +1776,15 @@ function isEvolutionLevel(level, previousLevel = level - 1) {
 }
 
 function getCharacterImageCandidatesForLevel(level) {
-  const candidates = [getCharacterImagePath(level, progress.stats)];
+  const stage = getCharacterEvolutionStage(level).stage;
+  const characterClass = getCharacterClass(progress.stats);
+  const candidates = [
+    getCharacterImagePath(level, progress.stats),
+    ...getFallbackCharacterImageStages(stage).map((imageStage) => `./assets/characters/${characterClass}-stage-${imageStage}.png`),
+    ...getFallbackCharacterImageStages(stage).map((imageStage) => `./assets/characters/str-stage-${imageStage}.png`),
+  ];
 
-  for (let index = characterStages.length - 1; index >= 0; index -= 1) {
-    if (level >= characterStages[index].minLevel) {
-      candidates.push(characterStages[index].src);
-    }
-  }
-
-  return candidates.length > 0 ? candidates : [characterStages[0].src];
+  return [...new Set(candidates)];
 }
 
 function renderCharacterEvolutionInfo(level) {
@@ -3968,13 +3973,6 @@ document.querySelector("[data-character-image]")?.addEventListener("error", (eve
   if (candidates[nextIndex]) {
     image.dataset.characterCandidateIndex = String(nextIndex);
     image.src = candidates[nextIndex];
-    return;
-  }
-
-  const fallbackSrc = image.dataset.fallbackSrc;
-
-  if (fallbackSrc && !image.src.endsWith(fallbackSrc)) {
-    image.src = fallbackSrc;
     return;
   }
 

@@ -372,7 +372,7 @@ h3 {
 
 .hero-panel {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-columns: 124px minmax(0, 1fr);
   align-items: center;
   gap: 15px;
   padding: 17px;
@@ -391,8 +391,8 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 112px;
-  aspect-ratio: 1;
+  width: 124px;
+  aspect-ratio: 4 / 5;
   border: 2px solid rgba(201, 154, 53, 0.78);
   border-radius: 8px;
   background-color: rgba(255, 247, 223, 0.1);
@@ -411,11 +411,12 @@ h3 {
 
 .character-image {
   position: absolute;
-  inset: 2px;
+  inset: 4px;
   z-index: 1;
-  width: calc(100% - 4px);
-  height: calc(100% - 4px);
-  object-fit: var(--asset-character-image-object-fit);
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  object-fit: contain;
+  object-position: center top;
   opacity: 1;
   filter: drop-shadow(0 10px 10px rgba(48, 29, 20, 0.28));
 }
@@ -4693,12 +4694,12 @@ h3 {
   }
 
   .hero-panel {
-    grid-template-columns: 148px minmax(0, 1fr);
+    grid-template-columns: 156px minmax(0, 1fr);
     padding: 20px;
   }
 
   .character-frame {
-    width: 148px;
+    width: 156px;
   }
 
   .quest-list {
@@ -4719,13 +4720,13 @@ h3 {
   }
 
   .hero-panel {
-    grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
     gap: 12px;
     padding: 12px;
   }
 
   .character-frame {
-    width: 92px;
+    width: 96px;
   }
 
   .character-orb {

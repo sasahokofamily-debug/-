@@ -254,6 +254,14 @@ const characterStages = [
   },
 ];
 
+const characterEvolutionStages = [
+  { stage: 1, minLevel: 1, maxLevel: 9, label: "見習い" },
+  { stage: 2, minLevel: 10, maxLevel: 24, label: "駆け出し冒険者" },
+  { stage: 3, minLevel: 25, maxLevel: 49, label: "一人前の冒険者" },
+  { stage: 4, minLevel: 50, maxLevel: 74, label: "熟練冒険者" },
+  { stage: 5, minLevel: 75, maxLevel: 100, label: "伝説の冒険者" },
+];
+
 let progress = loadProgress();
 let managedQuests = loadManagedQuests();
 let rewards = loadRewards();
@@ -1308,44 +1316,61 @@ function getPrimaryStat(stats) {
 }
 
 function getCharacterClass(stats) {
-  const classByStat = {
-    STR: "warrior",
-    INT: "sage",
-    END: "guardian",
-    DEX: "ranger",
-    BALANCED: "hero",
-  };
-
-  return classByStat[getPrimaryStat(stats)] || classByStat.BALANCED;
+  return getMainStat(stats).toLowerCase();
 }
 
 function getCharacterTypeLabel(stats) {
   const labels = {
-    warrior: "戦士タイプ",
-    sage: "賢者タイプ",
-    guardian: "守護者タイプ",
-    ranger: "レンジャータイプ",
-    hero: "勇者タイプ",
+    STR: "勇者タイプ",
+    INT: "賢者タイプ",
+    END: "守護者タイプ",
+    DEX: "職人タイプ",
   };
 
-  return labels[getCharacterClass(stats)] || labels.hero;
+  return labels[getMainStat(stats)] || labels.STR;
+}
+
+function getMainStat(stats) {
+  const normalizedStats = normalizeStats(stats);
+  const statOrder = ["STR", "INT", "END", "DEX"];
+  return statOrder.reduce((bestStat, stat) => (normalizedStats[stat] > normalizedStats[bestStat] ? stat : bestStat), "STR");
+}
+
+function getCharacterEvolutionStage(level) {
+  const safeLevel = Math.max(1, Math.floor(Number(level) || 1));
+  return (
+    characterEvolutionStages.find((stage) => safeLevel >= stage.minLevel && safeLevel <= stage.maxLevel) ||
+    characterEvolutionStages[characterEvolutionStages.length - 1]
+  );
 }
 
 function getCharacterStageName(level) {
-  if (level >= 61) {
-    return "stage-4";
+  const stage = getCharacterEvolutionStage(level);
+  return `stage-${stage.stage}`;
+}
+
+function getNextEvolutionLevel(level) {
+  const currentStage = getCharacterEvolutionStage(level);
+  const nextStage = characterEvolutionStages.find((stage) => stage.stage === currentStage.stage + 1);
+  return nextStage ? nextStage.minLevel : null;
+}
+
+function getCharacterEvolutionLabel(level) {
+  const stage = getCharacterEvolutionStage(level);
+  return `stage${stage.stage} ${stage.label}`;
+}
+
+function getNextEvolutionLabel(level) {
+  const nextLevel = getNextEvolutionLevel(level);
+  if (!nextLevel) {
+    return "最終段階";
   }
-  if (level >= 31) {
-    return "stage-3";
-  }
-  if (level >= 11) {
-    return "stage-2";
-  }
-  return "stage-1";
+  return `Lv${nextLevel}まであと${Math.max(0, nextLevel - level)}`;
 }
 
 function getCharacterImagePath(level, stats) {
-  return `assets/characters/${getCharacterClass(stats)}/${getCharacterStageName(level)}.png`;
+  const stage = getCharacterEvolutionStage(level);
+  return `assets/characters/${getCharacterClass(stats)}-stage-${stage.stage}.png`;
 }
 
 function escapeHtml(value) {
@@ -1358,7 +1383,35 @@ function escapeHtml(value) {
 }
 
 function getLevel(xp) {
-  return Math.floor(xp / 100) + 1;
+  return getLevelInfo(xp).level;
+}
+
+function getRequiredXpForLevel(level) {
+  return 100 + (Math.max(1, level) - 1) * 50;
+}
+
+function getLevelInfo(xp) {
+  const safeXp = Math.max(0, Math.floor(Number(xp) || 0));
+  let level = 1;
+  let levelStartXp = 0;
+  let requiredXp = getRequiredXpForLevel(level);
+
+  while (safeXp >= levelStartXp + requiredXp) {
+    levelStartXp += requiredXp;
+    level += 1;
+    requiredXp = getRequiredXpForLevel(level);
+  }
+
+  const progressXp = safeXp - levelStartXp;
+
+  return {
+    level,
+    levelStartXp,
+    requiredXp,
+    progressXp,
+    progressPercent: Math.min(100, Math.max(0, Math.floor((progressXp / requiredXp) * 100))),
+    xpToNext: requiredXp - progressXp,
+  };
 }
 
 function getTitle(level) {
@@ -1491,7 +1544,7 @@ function getEstimatedQuestCountToLevel(xp) {
   return Math.max(1, Math.ceil(getXpToNextLevel(xp) / Math.max(averageXp, 1)));
 }
 
-function makeAchievement(id, name, description, conditionText, icon, isUnlocked) {
+function makeAchievement(id, name, description, conditionText, icon, isUnlocked, getProgress = null) {
   return {
     id,
     name,
@@ -1499,171 +1552,90 @@ function makeAchievement(id, name, description, conditionText, icon, isUnlocked)
     conditionText,
     icon,
     isUnlocked,
+    getProgress,
   };
 }
 
 const questAchievementData = [
   ["quest-1", "はじめの一歩", 1],
-  ["quest-3", "見習い冒険者", 3],
-  ["quest-5", "小さな依頼人", 5],
   ["quest-10", "駆け出しの旅人", 10],
-  ["quest-15", "村の助っ人", 15],
-  ["quest-20", "まじめな冒険者", 20],
-  ["quest-30", "依頼の達人", 30],
   ["quest-50", "努力の星", 50],
-  ["quest-75", "ギルドの期待株", 75],
   ["quest-100", "百の依頼を越えて", 100],
-  ["quest-150", "頼れる仲間", 150],
-  ["quest-200", "冒険の職人", 200],
   ["quest-300", "こつこつ勇者", 300],
-  ["quest-500", "ギルドの柱", 500],
-  ["quest-1000", "伝説への道", 1000],
+];
+
+const questStreakAchievementData = [
+  ["quest-streak-3", "3日の足あと", 3],
+  ["quest-streak-7", "7日続いた冒険", 7],
+  ["quest-streak-14", "2週間の努力家", 14],
+  ["quest-streak-30", "30日の守り手", 30],
 ];
 
 const loginStreakAchievementData = [
-  ["login-streak-1", "ただいまギルド", 1],
   ["login-streak-3", "3日続いた旅", 3],
   ["login-streak-7", "7日連続の勇者", 7],
-  ["login-streak-10", "10日の足あと", 10],
-  ["login-streak-14", "2週間の冒険者", 14],
-  ["login-streak-21", "21日の努力家", 21],
   ["login-streak-30", "30日の守り人", 30],
-  ["login-streak-60", "季節を越える者", 60],
-  ["login-streak-100", "百日修行", 100],
-  ["login-streak-365", "毎日の英雄", 365],
-];
-
-const totalLoginAchievementData = [
-  ["login-total-1", "ギルド初訪問", 1],
-  ["login-total-5", "いつもの顔", 5],
-  ["login-total-10", "常連冒険者", 10],
-  ["login-total-30", "ギルドの住人", 30],
-  ["login-total-50", "信頼の旅人", 50],
-  ["login-total-100", "百日の記録", 100],
-  ["login-total-200", "長旅の仲間", 200],
-  ["login-total-365", "年間冒険者", 365],
-];
-
-const xpAchievementData = [
-  ["xp-100", "はじめての経験", 100],
-  ["xp-500", "小さな成長", 500],
-  ["xp-1000", "学びの光", 1000],
-  ["xp-3000", "努力の結晶", 3000],
-  ["xp-5000", "成長の証", 5000],
-  ["xp-10000", "経験の旅人", 10000],
-  ["xp-30000", "知恵の冒険者", 30000],
-  ["xp-50000", "伝説の経験値", 50000],
-];
-
-const goldAchievementData = [
-  ["gold-10", "はじめての金貨", 10],
-  ["gold-50", "小さな財布", 50],
-  ["gold-100", "金貨集めの見習い", 100],
-  ["gold-300", "がんばり貯金", 300],
-  ["gold-500", "黄金の努力家", 500],
-  ["gold-1000", "宝箱の管理人", 1000],
-  ["gold-3000", "金貨の旅商人", 3000],
-  ["gold-5000", "黄金ギルドの仲間", 5000],
 ];
 
 const rewardAchievementData = [
   ["reward-1", "はじめての交換", 1],
-  ["reward-3", "小さな楽しみ", 3],
   ["reward-5", "ご褒美ハンター", 5],
   ["reward-10", "交換の達人", 10],
-  ["reward-20", "楽しみ上手", 20],
-  ["reward-50", "願いを叶える者", 50],
-];
-
-const levelAchievementData = [
-  ["level-2", "レベルアップの音", 2],
-  ["level-5", "ぐんぐん成長中", 5],
-  ["level-10", "若き冒険者", 10],
-  ["level-20", "中堅ギルド員", 20],
-  ["level-30", "頼れる先輩", 30],
-  ["level-50", "熟練の冒険者", 50],
-  ["level-75", "英雄候補", 75],
-  ["level-100", "伝説の入口", 100],
-];
-
-const statAchievementData = [
-  ["stat-str-10", "力の芽生え", "STR", "力", 10],
-  ["stat-str-30", "力自慢", "STR", "力", 30],
-  ["stat-str-50", "剛腕の冒険者", "STR", "力", 50],
-  ["stat-int-10", "賢さの芽生え", "INT", "賢さ", 10],
-  ["stat-int-30", "ひらめき名人", "INT", "賢さ", 30],
-  ["stat-int-50", "知恵の探検家", "INT", "賢さ", 50],
-  ["stat-end-10", "忍耐の芽生え", "END", "忍耐力", 10],
-  ["stat-end-30", "あきらめない心", "END", "忍耐力", 30],
-  ["stat-end-50", "粘り強き勇者", "END", "忍耐力", 50],
-  ["stat-dex-10", "器用さの芽生え", "DEX", "器用さ", 10],
-  ["stat-dex-30", "手先の名人", "DEX", "器用さ", 30],
-  ["stat-dex-50", "技の冒険者", "DEX", "器用さ", 50],
-];
-
-const balanceAchievementData = [
-  ["balance-10", "そろった力", 10],
-  ["balance-20", "バランス冒険者", 20],
-  ["balance-30", "四つの才能", 30],
-  ["balance-40", "万能の見習い", 40],
-  ["balance-50", "ギルドの万能者", 50],
-];
-
-const weekdayAchievementData = [
-  ["weekday-1", "月曜の一歩", 1, "月曜日"],
-  ["weekday-2", "火曜の努力家", 2, "火曜日"],
-  ["weekday-3", "水曜のひらめき", 3, "水曜日"],
-  ["weekday-4", "木曜のねばり", 4, "木曜日"],
-  ["weekday-5", "金曜の達成者", 5, "金曜日"],
-  ["weekday-6", "土曜の冒険者", 6, "土曜日"],
-  ["weekday-0", "日曜の勇者", 0, "日曜日"],
 ];
 
 const ACHIEVEMENTS = [
   ...questAchievementData.map(([id, name, count]) =>
-    makeAchievement(id, name, "クエスト達成を積み重ねた証", `クエスト${count}回達成`, "📜", (ctx) => ctx.questTotal >= count),
+    makeAchievement(
+      id,
+      name,
+      "クエスト達成を積み重ねた証",
+      `クエスト${count}回達成`,
+      "📜",
+      (ctx) => ctx.questTotal >= count,
+      (ctx) => ({ current: ctx.questTotal, target: count, unit: "回" }),
+    ),
+  ),
+  ...questStreakAchievementData.map(([id, name, days]) =>
+    makeAchievement(
+      id,
+      name,
+      "毎日クエストを続けた証",
+      `${days}日連続達成`,
+      "🔥",
+      (ctx) => ctx.questStreak >= days,
+      (ctx) => ({ current: ctx.questStreak, target: days, unit: "日" }),
+    ),
   ),
   ...loginStreakAchievementData.map(([id, name, days]) =>
-    makeAchievement(id, name, "毎日ギルドへ通った証", `${days}日連続ログイン`, "🔥", (ctx) => ctx.loginStreak >= days),
-  ),
-  ...totalLoginAchievementData.map(([id, name, days]) =>
-    makeAchievement(id, name, "ギルドを訪れ続けた記録", `累計${days}日ログイン`, "🏰", (ctx) => ctx.totalLoginDays >= days),
-  ),
-  ...xpAchievementData.map(([id, name, xp]) =>
-    makeAchievement(id, name, "経験を積み重ねた証", `累計XP${xp}獲得`, "✨", (ctx) => ctx.xp >= xp),
-  ),
-  ...goldAchievementData.map(([id, name, gold]) =>
-    makeAchievement(id, name, "金貨を集めた努力の証", `累計Gold${gold}獲得`, "🪙", (ctx) => ctx.totalGoldEarned >= gold),
+    makeAchievement(
+      id,
+      name,
+      "毎日ギルドへ通った証",
+      `${days}日連続ログイン`,
+      "🏰",
+      (ctx) => ctx.loginStreak >= days,
+      (ctx) => ({ current: ctx.loginStreak, target: days, unit: "日" }),
+    ),
   ),
   ...rewardAchievementData.map(([id, name, count]) =>
-    makeAchievement(id, name, "ご褒美を上手に使った証", `ご褒美を${count}回交換`, "🎁", (ctx) => ctx.rewardExchangeCount >= count),
+    makeAchievement(
+      id,
+      name,
+      "ご褒美を目標にがんばった証",
+      `ご褒美を${count}回交換`,
+      "🎁",
+      (ctx) => ctx.rewardExchangeCount >= count,
+      (ctx) => ({ current: ctx.rewardExchangeCount, target: count, unit: "回" }),
+    ),
   ),
-  ...levelAchievementData.map(([id, name, level]) =>
-    makeAchievement(id, name, "レベルアップで成長した証", `Lv${level}到達`, "⭐", (ctx) => ctx.level >= level),
-  ),
-  ...statAchievementData.map(([id, name, stat, label, value]) =>
-    makeAchievement(id, name, "能力が伸びた証", `${label}が${value}到達`, "⚔", (ctx) => ctx.stats[stat] >= value),
-  ),
-  ...balanceAchievementData.map(([id, name, value]) =>
-    makeAchievement(id, name, "4つの能力をバランスよく育てた証", `全ステータス${value}到達`, "⚖", (ctx) => Object.values(ctx.stats).every((stat) => stat >= value)),
-  ),
-  ...weekdayAchievementData.map(([id, name, day, label]) =>
-    makeAchievement(id, name, "曜日ごとの挑戦を達成した証", `${label}にクエスト達成`, "🗓", (ctx) => ctx.questWeekdays.includes(day)),
-  ),
-  makeAchievement("weekday-all", "一週間制覇", "すべての曜日で挑戦した証", "月〜日すべてでクエスト達成", "🌈", (ctx) => [0, 1, 2, 3, 4, 5, 6].every((day) => ctx.questWeekdays.includes(day))),
-  makeAchievement("morning-quest", "朝の冒険者", "午前中に動き出せた証", "午前中にクエスト達成", "🌅", (ctx) => ctx.hasMorningQuest),
-  makeAchievement("night-quest", "夜の努力家", "夜にも努力できた証", "夜にクエスト達成", "🌙", (ctx) => ctx.hasNightQuest),
-  makeAchievement("today-1", "今日もできた", "今日の一歩を刻んだ証", "1日に1個クエスト達成", "✅", (ctx) => ctx.todayCompleted >= 1),
-  makeAchievement("today-3", "すごい集中力", "今日の集中が光った証", "1日に3個クエスト達成", "💫", (ctx) => ctx.todayCompleted >= 3),
-  makeAchievement("today-5", "クエストラッシュ", "一気に進めた証", "1日に5個クエスト達成", "⚡", (ctx) => ctx.todayCompleted >= 5),
-  makeAchievement("first-stat", "小さな勝利", "はじめて能力が伸びた証", "はじめてステータスが上がる", "🌱", (ctx) => Object.values(ctx.stats).some((stat) => stat > 0)),
-  makeAchievement("first-title", "初めての称号", "新しい称号を得た証", "はじめて称号が変わる", "🏷", (ctx) => ctx.level >= 2 || progress.titleHistory.length > 0),
-  makeAchievement("first-gold", "宝箱を開く者", "はじめて金貨を受け取った証", "はじめてGoldを受け取る", "🧰", (ctx) => ctx.totalGoldEarned >= 10),
-  makeAchievement("view-growth", "成長の記録者", "成長を見つめた証", "成長画面を開く", "📖", (ctx) => ctx.visitedScreens.includes("growth")),
-  makeAchievement("all-menu", "ギルドを歩く者", "すべての場所を訪れた証", "全メニューを1回ずつ開く", "🧭", (ctx) => ACHIEVEMENT_MENU_IDS.every((screen) => ctx.visitedScreens.includes(screen))),
-  makeAchievement("weekly-10", "続ける才能", "7日間の積み重ねの証", "7日間で合計10クエスト達成", "🕯", (ctx) => ctx.recentQuestCount(7) >= 10),
-  makeAchievement("monthly-50", "小さな伝説", "30日間の努力の証", "30日間で合計50クエスト達成", "👑", (ctx) => ctx.recentQuestCount(30) >= 50),
 ];
+
+const activeAchievementIds = new Set(ACHIEVEMENTS.map((achievement) => achievement.id));
+const reconciledAchievements = unlockedAchievements.filter((id) => activeAchievementIds.has(id));
+if (reconciledAchievements.length !== unlockedAchievements.length) {
+  unlockedAchievements = reconciledAchievements;
+  saveAchievements();
+}
 
 function getAchievementContext() {
   const stats = normalizeStats(progress.stats);
@@ -1683,6 +1655,7 @@ function getAchievementContext() {
 
   return {
     questTotal,
+    questStreak: progress.streak?.current || 0,
     loginStreak: progress.loginStreak || 0,
     totalLoginDays: progress.totalLoginDays || 0,
     xp: progress.xp || 0,
@@ -1697,6 +1670,22 @@ function getAchievementContext() {
     visitedScreens: normalizeStringList(progress.visitedScreens),
     recentQuestCount,
   };
+}
+
+function getAchievementProgressText(achievement, context, unlocked) {
+  if (unlocked) {
+    return "達成済み";
+  }
+  if (typeof achievement.getProgress !== "function") {
+    return achievement.conditionText;
+  }
+
+  const progressInfo = achievement.getProgress(context);
+  const current = Math.max(0, Math.floor(Number(progressInfo.current) || 0));
+  const target = Math.max(1, Math.floor(Number(progressInfo.target) || 1));
+  const remaining = Math.max(0, target - current);
+  const unit = progressInfo.unit || "";
+  return remaining === 0 ? "まもなく達成" : `あと${remaining}${unit}で達成`;
 }
 
 function checkAchievements({ showToast = true } = {}) {
@@ -1766,16 +1755,19 @@ function getPreviousTitleForRecord(level) {
 }
 
 function getLevelProgress(xp) {
-  return xp % 100;
+  return getLevelInfo(xp).progressXp;
+}
+
+function getLevelProgressPercent(xp) {
+  return getLevelInfo(xp).progressPercent;
 }
 
 function getXpToNextLevel(xp) {
-  const levelProgress = getLevelProgress(xp);
-  return levelProgress === 0 ? 100 : 100 - levelProgress;
+  return getLevelInfo(xp).xpToNext;
 }
 
-function isEvolutionLevel(level) {
-  return level > 1 && level % 5 === 0;
+function isEvolutionLevel(level, previousLevel = level - 1) {
+  return getCharacterEvolutionStage(level).stage !== getCharacterEvolutionStage(previousLevel).stage;
 }
 
 function getCharacterImageCandidatesForLevel(level) {
@@ -1790,6 +1782,13 @@ function getCharacterImageCandidatesForLevel(level) {
   return candidates.length > 0 ? candidates : [characterStages[0].src];
 }
 
+function renderCharacterEvolutionInfo(level) {
+  setText("[data-character-type]", getCharacterTypeLabel(progress.stats));
+  setText("[data-character-stage]", getCharacterEvolutionLabel(level));
+  setText("[data-character-next-stage]", getNextEvolutionLabel(level));
+  setText("[data-character-fallback]", getCharacterTypeLabel(progress.stats).replace("タイプ", ""));
+}
+
 function completeQuest(questId, sourceElement) {
   const quest = getAllQuests().find((item) => item.id === questId);
   if (!quest || !isQuestVisible(quest) || isQuestCompleted(quest)) {
@@ -1797,7 +1796,7 @@ function completeQuest(questId, sourceElement) {
   }
 
   const previousLevel = getLevel(progress.xp);
-  const previousLevelProgress = getLevelProgress(progress.xp);
+  const previousLevelProgress = getLevelProgressPercent(progress.xp);
   const sourceRect = sourceElement?.getBoundingClientRect();
   const completedAt = new Date();
   const completedAtIso = completedAt.toISOString();
@@ -1836,7 +1835,7 @@ function completeQuest(questId, sourceElement) {
     titleHistory: updateTitleHistory(progress.titleHistory, previousLevel, nextLevel, completedAtIso),
   };
 
-  const shouldPlayEvolution = nextLevel > previousLevel && isEvolutionLevel(nextLevel);
+  const shouldPlayEvolution = nextLevel > previousLevel && isEvolutionLevel(nextLevel, previousLevel);
   if (shouldPlayEvolution) {
     queueCharacterEvolution();
   }
@@ -2282,15 +2281,15 @@ function saveParentPin(pin) {
 
 function devLevelUp() {
   const previousLevel = getLevel(progress.xp);
-  const previousLevelProgress = getLevelProgress(progress.xp);
+  const previousLevelProgress = getLevelProgressPercent(progress.xp);
 
   progress = {
     ...progress,
-    xp: progress.xp + 100,
+    xp: progress.xp + getXpToNextLevel(progress.xp),
   };
 
   const nextLevel = getLevel(progress.xp);
-  const shouldPlayEvolution = nextLevel > previousLevel && isEvolutionLevel(nextLevel);
+  const shouldPlayEvolution = nextLevel > previousLevel && isEvolutionLevel(nextLevel, previousLevel);
   if (shouldPlayEvolution) {
     queueCharacterEvolution();
   }
@@ -3400,15 +3399,14 @@ function setText(selector, value) {
 }
 
 function renderXpBar() {
-  const levelProgress = getLevelProgress(progress.xp);
-  const level = getLevel(progress.xp);
+  const levelInfo = getLevelInfo(progress.xp);
   const xpFill = document.querySelector("[data-xp-fill]");
   const xpProgress = document.querySelector("[data-xp-progress]");
   const xpNext = document.querySelector("[data-xp-next]");
 
-  xpFill.style.width = `${levelProgress}%`;
-  xpProgress.textContent = progress.xp === 0 ? "はじまりの一歩" : `Lv${level} / ${levelProgress}XP進行中`;
-  xpNext.textContent = `次のLvまで あと${getXpToNextLevel(progress.xp)}XP`;
+  xpFill.style.width = `${levelInfo.progressPercent}%`;
+  xpProgress.textContent = progress.xp === 0 ? "はじまりの一歩" : `Lv${levelInfo.level} / ${levelInfo.progressXp}XP進行中`;
+  xpNext.textContent = `次のLvまで あと${levelInfo.xpToNext}XP`;
 }
 
 function renderCharacter(level) {
@@ -3825,6 +3823,7 @@ function renderAchievements() {
     count.textContent = `${unlockedCount} / ${ACHIEVEMENTS.length}`;
   }
 
+  const achievementContext = getAchievementContext();
   list.innerHTML = "";
   ACHIEVEMENTS.forEach((achievement) => {
     const unlocked = unlockedSet.has(achievement.id);
@@ -3836,6 +3835,7 @@ function renderAchievements() {
         <h4>${escapeHtml(achievement.name)}</h4>
         <p>${escapeHtml(achievement.description)}</p>
         <small>${escapeHtml(achievement.conditionText)}</small>
+        <small class="achievement-progress">${escapeHtml(getAchievementProgressText(achievement, achievementContext, unlocked))}</small>
       </div>
     `;
     list.append(item);
@@ -3896,7 +3896,7 @@ function render() {
     titleDescElement.textContent = title.desc;
   }
   setText("[data-sub-title-name]", subTitle.name);
-  setText("[data-character-type]", getCharacterTypeLabel(progress.stats));
+  renderCharacterEvolutionInfo(level);
   if (titleChanged && titleNameElement) {
     const titleBlock = titleNameElement.closest(".adventurer-copy");
     titleBlock?.classList.remove("is-title-changing");

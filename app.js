@@ -2732,7 +2732,13 @@ function renderRewardShop() {
     return;
   }
 
-  rewards.forEach((reward) => {
+  const sortedRewards = [...rewards].sort((a, b) => {
+    const aCost = Number.isFinite(a.cost) ? a.cost : Number.MAX_SAFE_INTEGER;
+    const bCost = Number.isFinite(b.cost) ? b.cost : Number.MAX_SAFE_INTEGER;
+    return aCost - bCost;
+  });
+
+  sortedRewards.forEach((reward) => {
     const canExchange = progress.gold >= reward.cost;
     const remainingGold = Math.max(0, reward.cost - progress.gold);
     const item = document.createElement("article");

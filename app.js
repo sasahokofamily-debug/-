@@ -9,7 +9,7 @@ const PARENT_NOTES_KEY = "sora_guild_app_parent_notes_dev";
 const ONBOARDING_KEY = "hasSeenOnboarding";
 const BGM_ENABLED_KEY = "sora_guild_app_bgm_enabled_dev";
 const BGM_SRC = "./assets/audio/bgm/bgm_main.mp3";
-const BGM_VOLUME = 0.34;
+const BGM_VOLUME = 0.3;
 const SFX_ENABLED_KEY = "sora_guild_app_sfx_enabled_dev";
 const SFX_VOLUME = 0.62;
 const PARENT_PIN_KEY = "sora_guild_app_parent_pin_dev";
@@ -302,6 +302,7 @@ let onboardingIndex = 0;
 let bgmEnabled = true;
 let bgmAudio = null;
 let bgmInteractionArmed = false;
+let bgmStarted = false;
 let sfxInteractionPrimed = false;
 let sfxEnabled = localStorage.getItem(SFX_ENABLED_KEY) !== "false";
 const sounds = {
@@ -442,25 +443,11 @@ function getBgmAudio() {
     bgmAudio.loop = true;
     bgmAudio.volume = BGM_VOLUME;
     bgmAudio.preload = "auto";
-    bgmAudio.addEventListener("playing", () => updateBgmButton(false));
     bgmAudio.addEventListener("error", () => {
       console.warn("BGM音源を読み込めませんでした", BGM_SRC);
-      updateBgmButton(true);
     });
   }
   return bgmAudio;
-}
-
-function updateBgmButton(needsStart = false) {
-  const button = document.querySelector("[data-bgm-toggle]");
-  if (!button) {
-    return;
-  }
-  const shouldShow = bgmEnabled && needsStart;
-  button.hidden = !shouldShow;
-  button.textContent = "BGMを再生";
-  button.setAttribute("aria-pressed", String(!shouldShow));
-  button.classList.toggle("is-active", shouldShow);
 }
 
 function preloadAudioAssets() {
@@ -525,8 +512,6 @@ function playBgm() {
   if (playPromise && typeof playPromise.catch === "function") {
     return playPromise.catch((error) => {
       console.warn("BGM再生を開始できませんでした", error);
-      updateBgmButton(true);
-      armBgmStartOnInteraction();
     });
   }
   return Promise.resolve();
@@ -539,17 +524,17 @@ function pauseBgm() {
 }
 
 function armBgmStartOnInteraction() {
-  if (bgmInteractionArmed || !bgmEnabled) {
+  if (bgmInteractionArmed || bgmStarted || !bgmEnabled) {
     return;
   }
   bgmInteractionArmed = true;
   const start = (event) => {
-    bgmInteractionArmed = false;
-    removeBgmInteractionListeners(start);
-    if (event?.type === "keydown" && event.key === "Tab") {
-      armBgmStartOnInteraction();
+    if (bgmStarted) {
       return;
     }
+    bgmInteractionArmed = false;
+    removeBgmInteractionListeners(start);
+    bgmStarted = true;
     primeSfxOnInteraction();
     playBgm();
   };
@@ -557,24 +542,21 @@ function armBgmStartOnInteraction() {
 }
 
 function addBgmInteractionListeners(handler) {
-  document.addEventListener("pointerdown", handler, { capture: true, passive: true });
   document.addEventListener("touchstart", handler, { capture: true, passive: true });
   document.addEventListener("click", handler, { capture: true });
-  document.addEventListener("keydown", handler, { capture: true });
 }
 
 function removeBgmInteractionListeners(handler) {
-  document.removeEventListener("pointerdown", handler, { capture: true });
   document.removeEventListener("touchstart", handler, { capture: true });
   document.removeEventListener("click", handler, { capture: true });
-  document.removeEventListener("keydown", handler, { capture: true });
 }
 
 function setBgmEnabled(enabled) {
   bgmEnabled = enabled;
   localStorage.setItem(BGM_ENABLED_KEY, JSON.stringify(bgmEnabled));
-  updateBgmButton(false);
   if (bgmEnabled) {
+    bgmStarted = false;
+    armBgmStartOnInteraction();
     playBgm();
   } else {
     pauseBgm();
@@ -4060,12 +4042,6 @@ document.querySelectorAll("[data-nav-icon-image]").forEach((image) => {
 });
 
 document.addEventListener("click", (event) => {
-  const bgmStartButton = event.target.closest("[data-bgm-toggle]");
-  if (bgmStartButton) {
-    setBgmEnabled(true);
-    return;
-  }
-
   const navButton = event.target.closest("[data-nav]");
   if (navButton) {
     if (navButton.dataset.nav === "admin" && !isParentUnlocked) {

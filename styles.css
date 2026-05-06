@@ -2991,31 +2991,6 @@ h3 {
   animation: guildToast 1700ms ease both;
 }
 
-.audio-start-button {
-  position: fixed;
-  right: 14px;
-  bottom: calc(92px + env(safe-area-inset-bottom));
-  z-index: 25;
-  min-height: 42px;
-  padding: 10px 14px;
-  border: 1px solid rgba(241, 210, 122, 0.72);
-  border-radius: 999px;
-  color: var(--wood-dark);
-  background:
-    linear-gradient(180deg, rgba(255, 247, 223, 0.24), transparent 42%),
-    linear-gradient(180deg, var(--effect-gold-light), var(--effect-gold));
-  box-shadow:
-    0 10px 22px rgba(48, 29, 20, 0.26),
-    0 0 16px rgba(241, 210, 122, 0.24);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 900;
-}
-
-.audio-start-button[hidden] {
-  display: none;
-}
-
 .recent-achievement-card,
 .achievement-card {
   transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;

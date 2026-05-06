@@ -29,13 +29,14 @@ function doPost(e) {
     const gold = Number(data.gold || 0);
     const remainingGold = Number(data.remainingGold || 0);
     const date = data.date || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM/dd HH:mm");
+    const adventurerName = formatAdventurerName(name);
 
     const subject = "【ギルド報告】ご褒美交換のお知らせ";
     const plainText = [
       "【ギルド報告書】",
       "",
-      `${name}は`,
-      `「${reward}」を交換しました`,
+      `冒険者${adventurerName}は、見事に任務を達成し、`,
+      `報酬として「${reward}」を交換しました。`,
       "",
       `消費：${gold} G`,
       `残り：${remainingGold} G`,
@@ -45,26 +46,13 @@ function doPost(e) {
       `日時：${date}`,
     ].join("\n");
 
-    const htmlBody = `
-      <div style="margin:0;padding:24px;background:#f3ead7;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',Meiryo,sans-serif;color:#3f2a1f;">
-        <div style="max-width:560px;margin:0 auto;padding:24px;border:1px solid #d3ad5c;border-radius:16px;background:#fff8e8;box-shadow:0 12px 28px rgba(63,42,31,0.18);">
-          <p style="margin:0 0 8px;color:#b58a31;font-size:13px;font-weight:700;letter-spacing:0.04em;">FANTASY GUILD REPORT</p>
-          <h1 style="margin:0 0 20px;color:#3f2a1f;font-size:28px;line-height:1.25;">【ギルド報告書】</h1>
-          <p style="margin:0 0 18px;font-size:18px;line-height:1.8;">
-            <strong>${escapeHtml(name)}</strong> は<br>
-            「<strong>${escapeHtml(reward)}</strong>」を交換しました
-          </p>
-          <div style="margin:18px 0;padding:16px;border-radius:12px;background:#f8edd1;border:1px solid rgba(181,138,49,0.35);">
-            <p style="margin:0 0 8px;font-size:17px;">消費：<strong style="font-size:22px;color:#8f2f2a;">${gold} G</strong></p>
-            <p style="margin:0;font-size:17px;">残り：<strong style="font-size:22px;color:#163251;">${remainingGold} G</strong></p>
-          </div>
-          <p style="margin:20px 0;padding:14px 16px;border-radius:999px;background:#ead17f;color:#3f2a1f;font-size:18px;font-weight:800;text-align:center;">
-            よくがんばりました✨
-          </p>
-          <p style="margin:18px 0 0;color:#6f4d3b;font-size:14px;">日時：${escapeHtml(date)}</p>
-        </div>
-      </div>
-    `;
+    const htmlBody = buildRewardExchangeHtml({
+      adventurerName,
+      reward,
+      gold,
+      remainingGold,
+      date,
+    });
 
     MailApp.sendEmail({
       to: NOTIFY_EMAIL,
@@ -320,6 +308,50 @@ function buildWeeklyReportHtml(report, hasRecord) {
   `;
 }
 
+function buildRewardExchangeHtml(report) {
+  return `
+    <div style="margin:0;padding:28px 14px;background:#eadcc1;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',Meiryo,sans-serif;color:#3d291d;">
+      <div style="max-width:600px;margin:0 auto;padding:10px;border:1px solid #8b6530;border-radius:18px;background:#6b4526;box-shadow:0 18px 34px rgba(45,27,15,0.28);">
+        <div style="padding:24px 22px;border:2px solid #d2ad5b;border-radius:14px;background:#fff3d7;background-image:linear-gradient(135deg,rgba(111,77,59,0.035) 0 1px,transparent 1px 8px),linear-gradient(180deg,#fff8e6 0%,#f3dfb5 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.65),inset 0 -3px 8px rgba(92,54,22,0.13);">
+          <p style="margin:0 0 8px;color:#9a6f24;font-size:12px;font-weight:800;letter-spacing:0.08em;text-align:center;">FANTASY GUILD OFFICIAL REPORT</p>
+          <h1 style="margin:0 0 18px;color:#3d291d;font-size:30px;line-height:1.2;text-align:center;">ギルド報告書</h1>
+          <div style="height:2px;margin:0 0 22px;background:linear-gradient(90deg,transparent,#d2ad5b,transparent);"></div>
+
+          <p style="margin:0 0 18px;font-size:17px;line-height:1.9;">
+            冒険者 <strong style="font-size:20px;color:#2f2118;">${escapeHtml(report.adventurerName)}</strong> は、見事に任務を達成し、<br>
+            報酬として <strong style="color:#7a241f;">『${escapeHtml(report.reward)}』</strong> を交換しました。
+          </p>
+
+          <div style="margin:20px 0;padding:16px;border:1px solid rgba(139,101,48,0.42);border-radius:12px;background:#f8e8c6;box-shadow:inset 0 1px 0 rgba(255,255,255,0.55);">
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              <tr>
+                <td style="padding:8px 4px;color:#6b4a2e;font-size:14px;font-weight:800;">交換したご褒美</td>
+                <td style="padding:8px 4px;color:#2f2118;font-size:17px;font-weight:900;text-align:right;">${escapeHtml(report.reward)}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 4px;color:#6b4a2e;font-size:14px;font-weight:800;">消費Gold</td>
+                <td style="padding:8px 4px;color:#8f2f2a;font-size:22px;font-weight:900;text-align:right;">${Number(report.gold || 0)} G</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 4px;color:#6b4a2e;font-size:14px;font-weight:800;">残りGold</td>
+                <td style="padding:8px 4px;color:#7b5a20;font-size:22px;font-weight:900;text-align:right;">${Number(report.remainingGold || 0)} G</td>
+              </tr>
+              <tr>
+                <td style="padding:8px 4px;color:#6b4a2e;font-size:14px;font-weight:800;">日時</td>
+                <td style="padding:8px 4px;color:#3d291d;font-size:14px;font-weight:800;text-align:right;">${escapeHtml(report.date)}</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="margin:20px 0 0;padding:14px 16px;border:1px solid rgba(139,101,48,0.32);border-radius:999px;background:linear-gradient(180deg,#f3d77c,#d2ad5b);color:#3d291d;font-size:18px;font-weight:900;text-align:center;">
+            ギルドより称賛を贈ります。よくがんばりました。
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function buildWeeklyMetric(label, value, unit, color) {
   return `
     <div style="padding:14px 10px;border-radius:12px;background:#f8edd1;border:1px solid rgba(181,138,49,0.3);text-align:center;">
@@ -327,6 +359,11 @@ function buildWeeklyMetric(label, value, unit, color) {
       <p style="margin:0;color:${color};font-size:24px;font-weight:900;line-height:1;">${Number(value || 0)}<span style="font-size:13px;margin-left:3px;">${escapeHtml(unit)}</span></p>
     </div>
   `;
+}
+
+function formatAdventurerName(name) {
+  const safeName = String(name || "そら").trim() || "そら";
+  return /(?:くん|さん|ちゃん|君|様)$/.test(safeName) ? safeName : `${safeName}くん`;
 }
 
 function normalizeStats(stats) {

@@ -18,6 +18,7 @@ const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuG
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
 const WEEKLY_REPORT_GAS_URL = "https://script.google.com/macros/s/AKfycbz0-CEA4p6uLRctEVfWKDJo53BSEWpj-V6A8hMOjbTgrT33hMfvqZ6wGFDD6_N4rt4C/exec";
 const WEEKLY_REPORT_SENT_WEEK_KEY = "sora_guild_app_last_weekly_report_sent_week_dev";
+const BACKUP_RESTORE_MESSAGE_KEY = "sora_guild_app_backup_restore_message";
 const isTestMode = false;
 const PARENT_PIN = "0718";
 const LOGIN_BONUS_GOLD = 10;
@@ -63,6 +64,7 @@ const BACKUP_STORAGE_KEYS = [
   REWARD_HISTORY_KEY,
   ACHIEVEMENTS_KEY,
   WEEKLY_REPORT_HISTORY_KEY,
+  WEEKLY_REPORT_SENT_WEEK_KEY,
   PARENT_NOTES_KEY,
   ONBOARDING_KEY,
   BGM_ENABLED_KEY,
@@ -2420,6 +2422,17 @@ function setBackupMessage(message, isError = false) {
   element.classList.toggle("is-error", isError);
 }
 
+function showBackupRestoreMessageIfNeeded() {
+  const message = sessionStorage.getItem(BACKUP_RESTORE_MESSAGE_KEY);
+  if (!message) {
+    return;
+  }
+
+  sessionStorage.removeItem(BACKUP_RESTORE_MESSAGE_KEY);
+  setBackupMessage(message);
+  window.setTimeout(() => window.alert(message), 250);
+}
+
 function createBackupData() {
   const storage = {};
   BACKUP_STORAGE_KEYS.forEach((key) => {
@@ -2437,6 +2450,10 @@ function createBackupData() {
   };
 }
 
+function getBackupFileName() {
+  return `guild-app-backup-${getDateKey()}.json`;
+}
+
 function downloadBackup() {
   if (!isParentUnlocked) {
     showParentAuth();
@@ -2448,7 +2465,7 @@ function downloadBackup() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "guild-backup.json";
+  link.download = getBackupFileName();
   document.body.append(link);
   link.click();
   link.remove();
@@ -2474,7 +2491,13 @@ function normalizeBackupStorage(parsedBackup) {
 }
 
 function isValidBackupStorage(storage) {
-  return Object.values(storage).every((value) => {
+  return Object.entries(storage).every(([key, value]) => {
+    if (!BACKUP_STORAGE_KEYS.includes(key) || typeof value !== "string") {
+      return false;
+    }
+    if (key === WEEKLY_REPORT_SENT_WEEK_KEY) {
+      return true;
+    }
     try {
       JSON.parse(value);
       return true;
@@ -2509,23 +2532,13 @@ function restoreBackupFromText(text) {
     return;
   }
 
+  BACKUP_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
   Object.entries(storage).forEach(([key, value]) => {
     localStorage.setItem(key, value);
   });
 
-  progress = loadProgress();
-  managedQuests = loadManagedQuests();
-  rewards = loadRewards();
-  rewardHistory = loadRewardHistory();
-  unlockedAchievements = loadAchievements();
-  weeklyReportHistory = loadWeeklyReportHistory();
-  progress = reconcileProgressFromHistory(progress);
-  editingQuestId = null;
-  editingRewardId = null;
-  isQuestCreateOpen = false;
-  saveProgress();
-  render();
-  setBackupMessage("バックアップから復元しました");
+  sessionStorage.setItem(BACKUP_RESTORE_MESSAGE_KEY, "復元しました");
+  window.location.reload();
 }
 
 function handleBackupFileChange(event) {
@@ -4819,6 +4832,7 @@ if (!progress.visitedScreens.includes("home")) {
 }
 const loginBonusResult = applyLoginBonus();
 render();
+showBackupRestoreMessageIfNeeded();
 initializeBgm();
 const isOnboardingVisible = showOnboardingIfNeeded();
 if (!isOnboardingVisible) {

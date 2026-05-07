@@ -1315,6 +1315,7 @@ function createWeeklyReportPayload() {
     questsCompleted: report.completed,
     xpEarned: report.xp,
     goldEarned: report.gold,
+    currentLevel: getLevel(progress.xp),
     strGain: stats.STR || 0,
     intGain: stats.INT || 0,
     endGain: stats.END || 0,
@@ -1336,22 +1337,59 @@ function setWeeklyReportSendMessage(message, isError = false) {
 }
 
 function sendWeeklyReportToGas(report) {
-  if (!WEEKLY_REPORT_GAS_URL) {
+  if (!WEEKLY_REPORT_GAS_URL || WEEKLY_REPORT_GAS_URL.includes("ここに貼り付け")) {
     return Promise.reject(new Error("週間レポートGAS URLが未設定です"));
   }
+
+  const payload = {
+    type: "weeklyReport",
+    ...report,
+  };
 
   return fetch(WEEKLY_REPORT_GAS_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "text/plain;charset=utf-8",
     },
-    body: JSON.stringify(report),
-  }).then((response) => {
-    if (!response.ok) {
-      throw new Error(`週間レポート送信に失敗しました: ${response.status}`);
-    }
-    return true;
-  });
+    body: JSON.stringify(payload),
+  })
+    .then(async (response) => {
+      const responseText = await response.text();
+      let responseJson = null;
+
+      try {
+        responseJson = responseText ? JSON.parse(responseText) : null;
+      } catch (error) {
+        console.warn("週間レポートGASレスポンスをJSONとして読めませんでした", {
+          url: WEEKLY_REPORT_GAS_URL,
+          status: response.status,
+          responseText,
+          error,
+        });
+      }
+
+      if (!response.ok || !responseJson?.success) {
+        console.warn("週間レポートGAS送信エラー詳細", {
+          url: WEEKLY_REPORT_GAS_URL,
+          status: response.status,
+          ok: response.ok,
+          payload,
+          response: responseJson,
+          responseText,
+        });
+        throw new Error(responseJson?.error || `週間レポート送信に失敗しました: ${response.status}`);
+      }
+
+      return responseJson;
+    })
+    .catch((error) => {
+      console.warn("週間レポートfetchに失敗しました", {
+        url: WEEKLY_REPORT_GAS_URL,
+        payload,
+        error,
+      });
+      throw error;
+    });
 }
 
 function sendWeeklyReport({ manual = false } = {}) {
@@ -1377,7 +1415,7 @@ function sendWeeklyReport({ manual = false } = {}) {
     .catch((error) => {
       console.warn("週間レポート送信に失敗しました", error);
       if (manual) {
-        setWeeklyReportSendMessage("送信に失敗しました", true);
+        setWeeklyReportSendMessage("送信に失敗しました。GAS URLまたは権限を確認してください", true);
       }
       return false;
     });

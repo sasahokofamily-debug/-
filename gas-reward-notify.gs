@@ -16,12 +16,38 @@ const WEEKLY_REPORT_HEADERS = [
   "連続ログイン日数",
 ];
 
+// 必要なGAS権限:
+// - MailApp.sendEmail: メール送信
+// - PropertiesService: 週間レポートの一時保存
+// - SpreadsheetApp: weekly_reports シートへの保存
+// - ScriptApp: 週次トリガー作成時のみ
+// UrlFetchApp.fetch は現在このGAS内では使用していません。
 function doPost(e) {
   try {
-    const data = JSON.parse(e.postData.contents || "{}");
+    if (!e || !e.postData || typeof e.postData.contents !== "string") {
+      return createJsonResponse({
+        success: false,
+        error: "postDataが空です。WebアプリのPOST設定を確認してください。",
+      });
+    }
+
+    let data;
+    try {
+      data = JSON.parse(e.postData.contents || "{}");
+    } catch (parseError) {
+      return createJsonResponse({
+        success: false,
+        error: `JSON.parseに失敗しました: ${parseError.message}`,
+      });
+    }
+
     if (data.type === "weeklyReport") {
-      saveWeeklyReport(data);
-      return ContentService.createTextOutput("weekly-report-saved");
+      const report = saveWeeklyReport(data);
+      return createJsonResponse({
+        success: true,
+        type: "weeklyReport",
+        report,
+      });
     }
 
     const name = data.name || "そら";
@@ -61,29 +87,50 @@ function doPost(e) {
       htmlBody,
     });
 
-    return ContentService.createTextOutput("ok");
+    return createJsonResponse({
+      success: true,
+      type: "rewardExchange",
+    });
   } catch (error) {
-    console.warn(error);
-    return ContentService.createTextOutput("error");
+    console.warn("doPost error", error);
+    return createJsonResponse({
+      success: false,
+      error: error && error.message ? error.message : String(error),
+    });
   }
 }
 
+function createJsonResponse(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function saveWeeklyReport(data) {
+  const stats = normalizeStats(data.stats || {
+    STR: data.strGain,
+    INT: data.intGain,
+    END: data.endGain,
+    DEX: data.dexGain,
+  });
+
   const report = {
     name: data.name || "そら",
-    completed: Number(data.completed || 0),
-    xp: Number(data.xp || 0),
-    gold: Number(data.gold || 0),
-    stats: normalizeStats(data.stats),
-    statGrowth: data.statGrowth || formatStatGrowth(normalizeStats(data.stats)),
+    completed: Number(data.questsCompleted ?? data.completed ?? 0),
+    xp: Number(data.xpEarned ?? data.xp ?? 0),
+    gold: Number(data.goldEarned ?? data.gold ?? 0),
+    currentLevel: Number(data.currentLevel ?? data.level ?? 1),
+    stats,
+    statGrowth: data.statGrowth || formatStatGrowth(stats),
     loginStreak: Number(data.loginStreak || 0),
     weekStart: data.weekStart || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd"),
-    weekEnd: getWeekEndKey(data.weekStart || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd")),
+    weekEnd: data.weekEnd || getWeekEndKey(data.weekStart || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd")),
     savedAt: Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM/dd HH:mm"),
   };
 
   PropertiesService.getScriptProperties().setProperty(WEEKLY_REPORT_PROPERTY_KEY, JSON.stringify(report));
   saveWeeklyReportToSheet(report);
+  return report;
 }
 
 function sendWeeklyReport() {
@@ -109,6 +156,7 @@ function sendWeeklyReportEmail() {
     completed: 0,
     xp: 0,
     gold: 0,
+    currentLevel: 1,
     stats: { STR: 0, INT: 0, END: 0, DEX: 0 },
     statGrowth: "まだありません",
     loginStreak: 0,
@@ -122,26 +170,28 @@ function sendWeeklyReportEmail() {
     safeReport.weekEnd = getWeekEndKey(currentWeekStart);
   }
   const hasRecord = isCurrentWeek && (safeReport.completed > 0 || safeReport.xp > 0 || safeReport.gold > 0);
-  const subject = "【ギルド報告】今週の冒険記録";
+  const stats = normalizeStats(safeReport.stats);
+  const subject = "【ギルド週報】今週の冒険レポート";
   const plainText = hasRecord
     ? [
-        "【ギルド週間報告書】",
+        "【ギルド週報】今週の冒険レポート",
         "",
         `${safeReport.name}の今週の冒険記録です。`,
         "",
+        `期間：${safeReport.weekStart}〜${safeReport.weekEnd}`,
         `クエスト達成：${safeReport.completed}件`,
         `獲得XP：${safeReport.xp} XP`,
         `獲得Gold：${safeReport.gold} G`,
-        `伸びたステータス：${safeReport.statGrowth}`,
+        `現在レベル：Lv${Number(safeReport.currentLevel || 1)}`,
+        `STR：${stats.STR} / INT：${stats.INT} / END：${stats.END} / DEX：${stats.DEX}`,
         `連続ログイン：${safeReport.loginStreak}日`,
         "",
         "今週もよくがんばりました。来週の冒険も楽しみです。",
         "",
-        `集計週：${safeReport.weekStart}から`,
         `最終更新：${safeReport.savedAt}`,
       ].join("\n")
     : [
-        "【ギルド週間報告書】",
+        "【ギルド週報】今週の冒険レポート",
         "",
         "今週の記録はありません。",
         "",
@@ -277,32 +327,59 @@ function setupWeeklyReportTrigger() {
 }
 
 function buildWeeklyReportHtml(report, hasRecord) {
-  const statGrowth = hasRecord ? report.statGrowth : "今週の記録はありません";
+  const stats = normalizeStats(report.stats);
+  const period = `${report.weekStart || ""} 〜 ${report.weekEnd || getWeekEndKey(report.weekStart) || ""}`;
+  const currentLevel = Number(report.currentLevel || report.level || 1);
   const message = hasRecord
-    ? "今週もよくがんばりました。ギルドのみんなも拍手しています。"
-    : "今週の記録はありません。次の冒険の準備をしましょう。";
+    ? "今週もよくがんばりました。来週の冒険も楽しみです。"
+    : "今週の記録はありません。次の冒険の準備をして、また少しずつ進めましょう。";
 
   return `
-    <div style="margin:0;padding:24px;background:#f3ead7;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',Meiryo,sans-serif;color:#3f2a1f;">
-      <div style="max-width:600px;margin:0 auto;padding:24px;border:1px solid #d3ad5c;border-radius:16px;background:#fff8e8;box-shadow:0 12px 28px rgba(63,42,31,0.18);">
-        <p style="margin:0 0 8px;color:#b58a31;font-size:13px;font-weight:700;letter-spacing:0.04em;">FANTASY GUILD WEEKLY REPORT</p>
-        <h1 style="margin:0 0 18px;color:#3f2a1f;font-size:28px;line-height:1.25;">【ギルド週間報告書】</h1>
-        <p style="margin:0 0 18px;font-size:17px;line-height:1.8;">
-          <strong>${escapeHtml(report.name)}</strong> の今週の冒険記録です。
-        </p>
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0;">
-          ${buildWeeklyMetric("達成", report.completed, "件", "#8f2f2a")}
-          ${buildWeeklyMetric("獲得XP", report.xp, "XP", "#163251")}
-          ${buildWeeklyMetric("獲得Gold", report.gold, "G", "#8a6524")}
+    <div style="margin:0;padding:28px 14px;background:#eadcc1;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',Meiryo,sans-serif;color:#3d291d;">
+      <div style="max-width:600px;margin:0 auto;padding:10px;border:1px solid #8b6530;border-radius:18px;background:#6b4526;box-shadow:0 18px 34px rgba(45,27,15,0.28);">
+        <div style="padding:24px 22px;border:2px solid #d2ad5b;border-radius:14px;background:#fff3d7;background-image:linear-gradient(135deg,rgba(111,77,59,0.035) 0 1px,transparent 1px 8px),linear-gradient(180deg,#fff8e6 0%,#f3dfb5 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.65),inset 0 -3px 8px rgba(92,54,22,0.13);">
+          <p style="margin:0 0 8px;color:#9a6f24;font-size:12px;font-weight:800;letter-spacing:0.08em;text-align:center;">FANTASY GUILD WEEKLY REPORT</p>
+          <h1 style="margin:0 0 18px;color:#3d291d;font-size:30px;line-height:1.2;text-align:center;">ギルド週報</h1>
+          <div style="height:2px;margin:0 0 22px;background:linear-gradient(90deg,transparent,#d2ad5b,transparent);"></div>
+
+          <p style="margin:0 0 18px;font-size:17px;line-height:1.9;">
+            冒険者 <strong style="font-size:20px;color:#2f2118;">${escapeHtml(formatAdventurerName(report.name))}</strong> の<br>
+            <strong style="color:#7a241f;">今週の冒険レポート</strong> が届きました。
+          </p>
+
+          <div style="margin:20px 0;padding:16px;border:1px solid rgba(139,101,48,0.42);border-radius:12px;background:#f8e8c6;box-shadow:inset 0 1px 0 rgba(255,255,255,0.55);">
+            <h2 style="margin:0 0 12px;color:#6b4526;font-size:18px;line-height:1.35;">今週の冒険記録</h2>
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              ${buildWeeklyReportRow("期間", period, "#3d291d")}
+              ${buildWeeklyReportRow("クエスト達成数", `${Number(report.completed || 0)} 件`, "#8f2f2a")}
+              ${buildWeeklyReportRow("獲得XP", `${Number(report.xp || 0)} XP`, "#163251")}
+              ${buildWeeklyReportRow("獲得Gold", `${Number(report.gold || 0)} G`, "#8a6524")}
+              ${buildWeeklyReportRow("現在レベル", `Lv ${currentLevel}`, "#2f2118")}
+              ${buildWeeklyReportRow("連続ログイン", `${Number(report.loginStreak || 0)} 日`, "#7b5a20")}
+            </table>
+          </div>
+
+          <div style="margin:20px 0;padding:16px;border:1px solid rgba(139,101,48,0.38);border-radius:12px;background:#fff0cf;box-shadow:inset 0 1px 0 rgba(255,255,255,0.55);">
+            <h2 style="margin:0 0 12px;color:#6b4526;font-size:18px;line-height:1.35;">成長ステータス</h2>
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              ${buildWeeklyReportRow("STR / 力", stats.STR, "#9a342f")}
+              ${buildWeeklyReportRow("INT / 賢さ", stats.INT, "#24456d")}
+              ${buildWeeklyReportRow("END / 忍耐力", stats.END, "#37613b")}
+              ${buildWeeklyReportRow("DEX / 器用さ", stats.DEX, "#8a6524")}
+            </table>
+          </div>
+
+          <div style="margin:20px 0 0;padding:16px;border:1px solid rgba(139,101,48,0.32);border-radius:14px;background:linear-gradient(180deg,#f4df99,#d2ad5b);color:#3d291d;text-align:center;">
+            <h2 style="margin:0 0 8px;font-size:18px;line-height:1.35;">ギルドからのひとこと</h2>
+            <p style="margin:0;font-size:17px;font-weight:900;line-height:1.75;">
+              ${escapeHtml(message)}
+            </p>
+          </div>
+
+          <p style="margin:18px 0 0;color:#6b4a2e;font-size:12px;line-height:1.6;text-align:center;">
+            最終更新：${escapeHtml(report.savedAt || "")}
+          </p>
         </div>
-        <div style="margin:18px 0;padding:16px;border-radius:12px;background:#f8edd1;border:1px solid rgba(181,138,49,0.35);">
-          <p style="margin:0 0 8px;font-size:16px;">伸びたステータス：<strong>${escapeHtml(statGrowth)}</strong></p>
-          <p style="margin:0;font-size:16px;">連続ログイン：<strong>${Number(report.loginStreak || 0)}日</strong></p>
-        </div>
-        <p style="margin:20px 0;padding:14px 16px;border-radius:999px;background:#ead17f;color:#3f2a1f;font-size:17px;font-weight:800;text-align:center;">
-          ${escapeHtml(message)}
-        </p>
-        <p style="margin:18px 0 0;color:#6f4d3b;font-size:13px;">集計週：${escapeHtml(report.weekStart)} から / 最終更新：${escapeHtml(report.savedAt || "")}</p>
       </div>
     </div>
   `;
@@ -349,6 +426,15 @@ function buildRewardExchangeHtml(report) {
         </div>
       </div>
     </div>
+  `;
+}
+
+function buildWeeklyReportRow(label, value, color) {
+  return `
+    <tr>
+      <td style="padding:9px 4px;color:#6b4a2e;font-size:14px;font-weight:800;border-bottom:1px solid rgba(139,101,48,0.16);">${escapeHtml(label)}</td>
+      <td style="padding:9px 4px;color:${color};font-size:18px;font-weight:900;text-align:right;border-bottom:1px solid rgba(139,101,48,0.16);">${escapeHtml(value)}</td>
+    </tr>
   `;
 }
 

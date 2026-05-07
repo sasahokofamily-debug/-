@@ -110,7 +110,7 @@ const defaultQuests = [
     title: "宿題を終える",
     description: "今日の宿題を最後まで片づける。",
     frequency: "daily",
-    stat: "INT",
+    stat: "END",
     xpReward: 40,
     goldReward: 0,
   },
@@ -122,7 +122,7 @@ const defaultQuests = [
     title: "明日の準備",
     description: "時間割を見て、明日の持ち物をそろえる。",
     frequency: "daily",
-    stat: "END",
+    stat: "DEX",
     xpReward: 20,
     goldReward: 0,
   },
@@ -192,21 +192,25 @@ const defaultRewards = [
   {
     id: "game-10min",
     name: "ゲーム時間 +10分",
+    description: "少しだけ冒険の休憩時間を増やせます。",
     cost: 30,
   },
   {
     id: "game-20min",
     name: "ゲーム時間 +20分",
+    description: "たっぷり遊べる特別な時間です。",
     cost: 60,
   },
   {
     id: "favorite-snack",
     name: "好きなおやつ",
+    description: "がんばった日の小さな宝物です。",
     cost: 80,
   },
   {
     id: "holiday-special-play",
     name: "休日の特別遊び",
+    description: "休日に楽しむ特別なご褒美です。",
     cost: 150,
   },
 ];
@@ -1003,6 +1007,31 @@ function normalizeTitleHistoryItem(rawItem) {
 function inferQuestStat(rawQuest) {
   const text = `${rawQuest.title || ""} ${rawQuest.description || ""}`;
 
+  if (/犬.*散歩|散歩|運動|体操|走|筋トレ|スポーツ|外に出|外へ出|外出|なわとび/.test(text)) {
+    return "STR";
+  }
+  if (/計算カード|ピアノ|そろばん|食器.*洗|皿.*洗|靴.*そろ|靴.*揃|工作|制作|作る|折り紙|絵|描|ぬりえ|料理|手芸|準備|整え|整理|洗濯|たたむ/.test(text)) {
+    return "DEX";
+  }
+  if (/音読|読書|読む|読|調べ|チャレンジ冊子|学習理解|考え|学ぶ|勉強|漢字|テスト|プリント/.test(text)) {
+    return "INT";
+  }
+  if (/宿題|最後まで|毎日|続け|苦手|就寝|寝る|時間を守|野菜.*残さず|残さず食べ|歯みがき|歯磨き/.test(text)) {
+    return "END";
+  }
+  if (/食器|皿/.test(text)) {
+    return "DEX";
+  }
+  if (/掃除|片づけ|片付け|お手伝い|手伝い/.test(text)) {
+    return "STR";
+  }
+
+  return "END";
+}
+
+function inferLegacyQuestStat(rawQuest) {
+  const text = `${rawQuest.title || ""} ${rawQuest.description || ""}`;
+
   if (/宿題|勉強|学習|読書|音読|計算|漢字|テスト|プリント/.test(text)) {
     return "INT";
   }
@@ -1017,6 +1046,20 @@ function inferQuestStat(rawQuest) {
   }
 
   return "END";
+}
+
+function applyQuestStatPolicy(quest) {
+  const policyStat = inferQuestStat(quest);
+  const legacyStat = inferLegacyQuestStat(quest);
+
+  if (quest.stat === legacyStat && quest.stat !== policyStat) {
+    return {
+      ...quest,
+      stat: policyStat,
+    };
+  }
+
+  return quest;
 }
 
 function normalizeScheduleDays(rawDays) {
@@ -1082,7 +1125,7 @@ function loadLegacyCustomQuests() {
       return [];
     }
 
-    return parsed.map(normalizeQuest).filter(Boolean);
+    return parsed.map(normalizeQuest).filter(Boolean).map(applyQuestStatPolicy);
   } catch {
     return [];
   }
@@ -1094,7 +1137,9 @@ function loadManagedQuests() {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        return parsed.map(normalizeQuest).filter(Boolean);
+        const normalizedQuests = parsed.map(normalizeQuest).filter(Boolean).map(applyQuestStatPolicy);
+        localStorage.setItem(QUESTS_KEY, JSON.stringify(normalizedQuests));
+        return normalizedQuests;
       }
     }
   } catch {
@@ -1122,6 +1167,7 @@ function saveManagedQuests() {
 
 function normalizeReward(rawReward) {
   const name = String(rawReward.name || "").trim();
+  const description = String(rawReward.description || "").trim();
   const cost = Number(rawReward.cost);
   if (!name || !Number.isFinite(cost)) {
     return null;
@@ -1130,6 +1176,7 @@ function normalizeReward(rawReward) {
   return {
     id: String(rawReward.id || `reward-${Date.now()}`),
     name,
+    description,
     cost: Math.max(1, Math.round(cost)),
   };
 }
@@ -3028,6 +3075,11 @@ function renderQuestManager() {
             </div>
           </div>
           <p>${escapeHtml(quest.description)}</p>
+          <div class="managed-meta-grid" aria-label="クエスト設定">
+            <span><small>XP</small><strong>${quest.xpReward}</strong></span>
+            <span><small>Gold</small><strong>${quest.goldReward}</strong></span>
+            <span><small>能力</small><strong>${getStatLabel(quest.stat)}</strong></span>
+          </div>
           <div class="reward-row">
             ${renderQuestRewardBadges(quest)}
           </div>
@@ -3154,12 +3206,31 @@ function handleRewardCreateSubmit(event) {
   render();
 }
 
+function getRewardDescription(reward) {
+  if (reward.description) {
+    return reward.description;
+  }
+
+  if (/ゲーム|遊/.test(reward.name)) {
+    return "冒険のあとに楽しむ特別な時間です。";
+  }
+  if (/おやつ|ジュース|アイス|好きな/.test(reward.name)) {
+    return "がんばりを味わう小さな宝物です。";
+  }
+  if (/休日|お出かけ|特別/.test(reward.name)) {
+    return "ギルドから贈られる特別なご褒美です。";
+  }
+
+  return "Goldを集めて交換できるギルドのご褒美です。";
+}
+
 function renderRewardShop() {
   const list = document.querySelector("[data-reward-shop-list]");
   if (!list) {
     return;
   }
 
+  setText("[data-reward-shop-gold]", `所持Gold：${progress.gold}G`);
   list.innerHTML = "";
 
   if (rewards.length === 0) {
@@ -3179,14 +3250,21 @@ function renderRewardShop() {
   sortedRewards.forEach((reward) => {
     const canExchange = progress.gold >= reward.cost;
     const remainingGold = Math.max(0, reward.cost - progress.gold);
+    const description = getRewardDescription(reward);
     const item = document.createElement("article");
     item.className = `reward-shop-item${canExchange ? " is-available" : " is-locked"}`;
     item.innerHTML = `
       <div class="reward-shop-copy">
-        ${canExchange ? '<span class="reward-available-label">交換できる！</span>' : '<span class="reward-locked-label">Goldをためよう</span>'}
+        <div class="reward-shop-topline">
+          ${canExchange ? '<span class="reward-available-label">交換できる！</span>' : '<span class="reward-locked-label">Goldをためよう</span>'}
+          <span class="reward-shop-rank">Guild Item</span>
+        </div>
         <h4>${escapeHtml(reward.name)}</h4>
-        <p class="reward-cost"><strong>${reward.cost}</strong><span>Gold</span></p>
-        <p class="reward-note">${canExchange ? "今すぐ交換できます" : `あと${remainingGold}Gold`}</p>
+        <p class="reward-description">${escapeHtml(description)}</p>
+        <div class="reward-cost-row">
+          <p class="reward-cost"><strong>${reward.cost}</strong><span>Gold</span></p>
+          <p class="reward-note">${canExchange ? "今すぐ交換できます" : `あと${remainingGold}Gold`}</p>
+        </div>
       </div>
       <button type="button" data-exchange-reward="${escapeHtml(reward.id)}" ${canExchange ? "" : "disabled"}>${canExchange ? "交換する" : "Gold不足"}</button>
     `;
@@ -3238,6 +3316,9 @@ function renderRewardManager() {
             <h4>${escapeHtml(reward.name)}</h4>
             <span class="reward-badge">${reward.cost}G</span>
           </div>
+          <div class="managed-meta-grid managed-reward-meta" aria-label="ご褒美設定">
+            <span><small>必要Gold</small><strong>${reward.cost}</strong></span>
+          </div>
         </div>
         <div class="managed-quest-actions">
           <button class="quest-manage-button" type="button" data-edit-reward="${escapeHtml(reward.id)}">編集</button>
@@ -3281,6 +3362,18 @@ function renderRewardHistory() {
   });
 }
 
+function formatAdminUrlStatus(url) {
+  if (!url) {
+    return "未設定";
+  }
+
+  try {
+    return new URL(url).hostname || "設定済み";
+  } catch {
+    return "設定済み";
+  }
+}
+
 function handleRewardEditSubmit(event) {
   const form = event.target.closest("[data-edit-reward-form]");
   if (!form) {
@@ -3295,10 +3388,12 @@ function handleRewardEditSubmit(event) {
 
   const rewardId = form.dataset.editRewardForm;
   const formData = new FormData(form);
+  const currentReward = rewards.find((item) => item.id === rewardId);
   const reward = normalizeReward({
     id: rewardId,
     name: formData.get("name"),
     cost: formData.get("cost"),
+    description: currentReward?.description || "",
   });
   const message = form.querySelector("[data-edit-reward-message]");
 
@@ -3365,13 +3460,13 @@ function exchangeReward(rewardId) {
   saveProgress();
   saveRewardHistory();
   render();
+  showRewardExchangeToast();
   checkAchievements();
   notifyRewardExchange(historyItem).then((notified) => {
     if (!notified) {
       window.alert("交換は完了しました。通知だけ失敗しました。");
     }
   });
-  window.alert("ご褒美を交換しました");
 }
 
 function renderQuests() {
@@ -4020,6 +4115,20 @@ function showRewardFeedback(quest) {
   });
 }
 
+function showRewardExchangeToast() {
+  const toast = document.querySelector("[data-reward-toast]");
+  if (!toast) {
+    return;
+  }
+
+  enqueueToast(toast, {
+    message: "交換申請を送りました！",
+    timerName: "reward",
+    beforeShow: (element) => element.classList.add("is-shop"),
+    afterHide: (element) => element.classList.remove("is-shop"),
+  });
+}
+
 function playLoginBonusToast(message, duration = TOAST_DURATION) {
   const toast = document.querySelector("[data-login-bonus-toast]");
   if (!toast) {
@@ -4275,15 +4384,17 @@ function renderAchievements() {
   list.innerHTML = "";
   ACHIEVEMENTS.forEach((achievement) => {
     const unlocked = unlockedSet.has(achievement.id);
+    const progressText = getAchievementProgressText(achievement, achievementContext, unlocked);
     const item = document.createElement("article");
     item.className = `achievement-card${unlocked ? " is-unlocked" : ""}`;
     item.innerHTML = `
       <span class="achievement-icon" aria-hidden="true">${achievement.icon}</span>
       <div>
+        <span class="achievement-status">${unlocked ? "✓ 達成済み" : "あと少し"}</span>
         <h4>${escapeHtml(achievement.name)}</h4>
         <p>${escapeHtml(achievement.description)}</p>
         <small>${escapeHtml(achievement.conditionText)}</small>
-        <small class="achievement-progress">${escapeHtml(getAchievementProgressText(achievement, achievementContext, unlocked))}</small>
+        <small class="achievement-progress">${escapeHtml(progressText)}</small>
       </div>
     `;
     list.append(item);
@@ -4363,6 +4474,8 @@ function render() {
   setText("[data-record-xp]", progress.xp);
   setText("[data-record-gold]", progress.gold);
   setText("[data-record-completed]", progress.completedQuestIds.length);
+  setText("[data-notify-url-label]", formatAdminUrlStatus(NOTIFY_URL));
+  setText("[data-weekly-report-url-label]", formatAdminUrlStatus(WEEKLY_REPORT_GAS_URL));
   setText("[data-stat-str]", progress.stats.STR);
   setText("[data-stat-int]", progress.stats.INT);
   setText("[data-stat-end]", progress.stats.END);

@@ -369,8 +369,8 @@
           <section class="growth-panel" aria-labelledby="achievement-title">
             <div class="mini-section-heading achievement-heading">
               <div>
-                <p class="section-kicker">Badge</p>
-                <h3 id="achievement-title">実績</h3>
+                <p class="section-kicker">Adventure Log</p>
+                <h3 id="achievement-title">冒険の記録</h3>
               </div>
               <strong data-achievement-count>0 / 100</strong>
             </div>
@@ -386,7 +386,8 @@
           <section class="reward-shop" aria-labelledby="reward-shop-title">
             <div class="mini-section-heading">
               <p class="section-kicker">Exchange</p>
-              <h3 id="reward-shop-title">ご褒美一覧</h3>
+              <h3 id="reward-shop-title">ギルドショップ</h3>
+              <p class="reward-shop-lead" data-reward-shop-gold>所持Gold：0G</p>
             </div>
             <div class="reward-shop-list" data-reward-shop-list></div>
           </section>
@@ -425,6 +426,11 @@
             <span>開発確認用</span>
             <button class="dev-test-button" type="button" data-dev-level-up>Lv+1 テスト</button>
           </div>
+          <section class="admin-section admin-section-quests" aria-labelledby="admin-quest-section-title">
+            <div class="admin-section-heading">
+              <p class="section-kicker">Quest</p>
+              <h3 id="admin-quest-section-title">クエスト管理</h3>
+            </div>
           <button class="quest-create-toggle" type="button" data-toggle-quest-create aria-expanded="false" hidden>新しいクエスト追加</button>
           <form class="future-form quest-create-form" data-quest-create-form aria-label="クエスト追加フォーム" hidden>
             <h3>新しいクエスト追加</h3>
@@ -506,30 +512,38 @@
             <h3 id="quest-manage-title">クエスト一覧</h3>
             <div class="managed-quest-list" data-managed-quest-list></div>
           </section>
+          </section>
+          <section class="admin-section admin-section-notifications" aria-labelledby="admin-notification-section-title">
+            <div class="admin-section-heading">
+              <p class="section-kicker">Notice</p>
+              <h3 id="admin-notification-section-title">通知設定</h3>
+            </div>
+            <section class="future-form notification-settings-panel" aria-labelledby="notification-settings-title">
+              <h3 id="notification-settings-title">GAS通知</h3>
+              <div class="notification-setting-list">
+                <article>
+                  <span>ご褒美交換通知</span>
+                  <strong data-notify-url-label>設定済み</strong>
+                </article>
+                <article>
+                  <span>週間レポート通知</span>
+                  <strong data-weekly-report-url-label>設定済み</strong>
+                </article>
+              </div>
+              <p>通知URLはアプリ内の定数で管理しています。メール通知と週間レポート送信は既存設定を使用します。</p>
+            </section>
           <section class="future-form weekly-report-admin-panel" data-parent-mode-only aria-labelledby="weekly-report-admin-title" hidden>
             <h3 id="weekly-report-admin-title">週間レポート送信</h3>
             <p>現在の週間レポートをGoogle Apps Scriptへ送信します。GAS連携のテストに使えます。</p>
             <button class="quest-manage-button" type="button" data-weekly-report-send>週間レポートを送信</button>
             <p class="form-message weekly-send-message" data-weekly-send-message aria-live="polite"></p>
           </section>
-          <form class="future-form pin-change-form" data-parent-mode-only data-pin-change-form aria-label="PIN変更フォーム" hidden>
-            <h3>PIN変更</h3>
-            <p>親モードに入るためのPINを変更できます。4桁の数字で設定してください。</p>
-            <label>
-              現在のPIN
-              <input type="password" name="currentPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="現在のPIN" required>
-            </label>
-            <label>
-              新しいPIN
-              <input type="password" name="newPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="4桁の数字" required>
-            </label>
-            <label>
-              新しいPIN（確認）
-              <input type="password" name="confirmPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="もう一度入力" required>
-            </label>
-            <p class="form-message" data-pin-change-message aria-live="polite"></p>
-            <button type="submit">PINを変更</button>
-          </form>
+          </section>
+          <section class="admin-section admin-section-rewards" aria-labelledby="admin-reward-section-title">
+            <div class="admin-section-heading">
+              <p class="section-kicker">Reward</p>
+              <h3 id="admin-reward-section-title">ご褒美管理</h3>
+            </div>
           <form class="future-form reward-create-form" data-reward-create-form aria-label="ご褒美追加フォーム">
             <h3>ご褒美追加</h3>
             <label>
@@ -551,6 +565,30 @@
             <h3 id="reward-history-title">交換履歴</h3>
             <div class="reward-history-list" data-reward-history-list></div>
           </section>
+          </section>
+          <section class="admin-section admin-section-data" aria-labelledby="admin-data-section-title">
+            <div class="admin-section-heading">
+              <p class="section-kicker">Data</p>
+              <h3 id="admin-data-section-title">データ管理</h3>
+            </div>
+          <form class="future-form pin-change-form" data-parent-mode-only data-pin-change-form aria-label="PIN変更フォーム" hidden>
+            <h3>PIN変更</h3>
+            <p>親モードに入るためのPINを変更できます。4桁の数字で設定してください。</p>
+            <label>
+              現在のPIN
+              <input type="password" name="currentPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="現在のPIN" required>
+            </label>
+            <label>
+              新しいPIN
+              <input type="password" name="newPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="4桁の数字" required>
+            </label>
+            <label>
+              新しいPIN（確認）
+              <input type="password" name="confirmPin" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" placeholder="もう一度入力" required>
+            </label>
+            <p class="form-message" data-pin-change-message aria-live="polite"></p>
+            <button type="submit">PINを変更</button>
+          </form>
           <section class="future-form backup-panel" aria-labelledby="backup-title">
             <h3 id="backup-title">データ保管</h3>
             <p>この端末に保存されている進行状況、クエスト、ご褒美、実績をJSONファイルとして保管できます。</p>
@@ -576,6 +614,7 @@
             </label>
             <button class="quest-manage-button is-danger" type="button" data-admin-reset-execute>選択したデータをリセット</button>
             <p class="form-message reset-message" data-reset-message aria-live="polite"></p>
+          </section>
           </section>
         </section>
       </main>

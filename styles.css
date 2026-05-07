@@ -442,7 +442,7 @@ h3 {
 }
 
 .character-image.is-evolving {
-  animation: characterEvolution 760ms ease both;
+  animation: characterEvolution 820ms ease both;
 }
 
 .character-image.is-level-up {
@@ -493,17 +493,26 @@ h3 {
 
 @keyframes characterEvolution {
   0% {
-    opacity: 0;
-    transform: scale(0.94);
+    opacity: 0.92;
+    filter:
+      drop-shadow(0 14px 14px rgba(48, 29, 20, 0.3))
+      drop-shadow(0 0 8px rgba(241, 210, 122, 0.28));
+    transform: scale(1);
   }
 
   42% {
     opacity: 1;
-    transform: scale(1.05);
+    filter:
+      drop-shadow(0 16px 16px rgba(48, 29, 20, 0.28))
+      drop-shadow(0 0 28px rgba(255, 215, 116, 0.86));
+    transform: scale(1.2);
   }
 
   100% {
     opacity: 1;
+    filter:
+      drop-shadow(0 14px 14px rgba(48, 29, 20, 0.3))
+      drop-shadow(0 0 12px rgba(241, 210, 122, 0.32));
     transform: scale(1);
   }
 }
@@ -736,7 +745,7 @@ h3 {
 }
 
 .evolution-toast.is-visible {
-  animation: guildToast 1700ms ease both;
+  animation: guildToast 950ms ease both;
 }
 
 .evolution-modal {
@@ -758,7 +767,7 @@ h3 {
 }
 
 .evolution-modal.is-visible {
-  animation: evolutionModalFade 1850ms ease both;
+  animation: evolutionModalFade 950ms ease both;
 }
 
 .evolution-modal-card {
@@ -782,7 +791,7 @@ h3 {
 }
 
 .evolution-modal.is-visible .evolution-modal-card {
-  animation: evolutionModalCard 1850ms ease both;
+  animation: evolutionModalCard 950ms ease both;
 }
 
 .evolution-modal-image {

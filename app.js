@@ -12,6 +12,7 @@ const BGM_SRC = "./assets/audio/bgm/bgm_main.mp3";
 const BGM_VOLUME = 0.3;
 const SFX_ENABLED_KEY = "sora_guild_app_sfx_enabled_dev";
 const SFX_VOLUME = 0.62;
+const CHARACTER_STAGE_KEY = "sora_guild_app_character_stage_dev";
 const PARENT_PIN_KEY = "sora_guild_app_parent_pin_dev";
 const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbzPl6o5pJGvx_3F2GGuGz7PbC1ZmYKUnz9ewcx_F_hr1s7uEQmeNmDn-vZK2hQMUa13Dg/exec";
 // 週間レポート用GAS WebアプリURL。デプロイ後の /exec URL をここに貼り付けます。
@@ -63,6 +64,7 @@ const BACKUP_STORAGE_KEYS = [
   ONBOARDING_KEY,
   BGM_ENABLED_KEY,
   SFX_ENABLED_KEY,
+  CHARACTER_STAGE_KEY,
   PARENT_PIN_KEY,
 ];
 
@@ -333,10 +335,10 @@ const characterStages = [
 
 const characterEvolutionStages = [
   { stage: 1, minLevel: 1, maxLevel: 14, label: "見習い" },
-  { stage: 2, minLevel: 15, maxLevel: 34, label: "駆け出し冒険者" },
-  { stage: 3, minLevel: 35, maxLevel: 59, label: "一人前の冒険者" },
-  { stage: 4, minLevel: 60, maxLevel: 84, label: "熟練冒険者" },
-  { stage: 5, minLevel: 85, maxLevel: 100, label: "伝説の冒険者" },
+  { stage: 2, minLevel: 15, maxLevel: 34, label: "駆け出し" },
+  { stage: 3, minLevel: 35, maxLevel: 59, label: "一人前" },
+  { stage: 4, minLevel: 60, maxLevel: 84, label: "熟練" },
+  { stage: 5, minLevel: 85, maxLevel: 100, label: "伝説" },
 ];
 const characterImageStages = [1, 2, 3, 4, 5];
 
@@ -1486,7 +1488,7 @@ function getCharacterTypeLabel(stats) {
     STR: "勇者タイプ",
     INT: "賢者タイプ",
     END: "守護者タイプ",
-    DEX: "職人タイプ",
+    DEX: "技巧者タイプ",
   };
 
   return labels[getMainStat(stats)] || labels.STR;
@@ -1495,7 +1497,11 @@ function getCharacterTypeLabel(stats) {
 function getMainStat(stats) {
   const normalizedStats = normalizeStats(stats);
   const statOrder = ["STR", "INT", "END", "DEX"];
-  return statOrder.reduce((bestStat, stat) => (normalizedStats[stat] > normalizedStats[bestStat] ? stat : bestStat), "STR");
+  const maxValue = Math.max(...statOrder.map((stat) => normalizedStats[stat] || 0));
+  if (maxValue <= 0) {
+    return "STR";
+  }
+  return statOrder.find((stat) => normalizedStats[stat] === maxValue) || "STR";
 }
 
 function getCharacterEvolutionStage(level) {
@@ -1527,12 +1533,12 @@ function getNextEvolutionLabel(level) {
   if (!nextLevel) {
     return "最終段階";
   }
-  return `Lv${nextLevel}まであと${Math.max(0, nextLevel - level)}`;
+  return `あと${Math.max(0, nextLevel - level)}Lv`;
 }
 
 function getCharacterImagePath(level, stats) {
   const stage = getCharacterEvolutionStage(level);
-  return `./assets/characters/str-stage-${stage.stage}.png`;
+  return `./assets/characters/${getCharacterClass(stats)}-stage-${stage.stage}.png`;
 }
 
 function getFallbackCharacterImageStages(stage) {
@@ -2034,11 +2040,44 @@ function isEvolutionLevel(level, previousLevel = level - 1) {
   return getCharacterEvolutionStage(level).stage !== getCharacterEvolutionStage(previousLevel).stage;
 }
 
+function getStoredCharacterStage() {
+  const storedStage = Number(localStorage.getItem(CHARACTER_STAGE_KEY));
+  return Number.isFinite(storedStage) && storedStage >= 1 ? storedStage : null;
+}
+
+function saveStoredCharacterStage(stage) {
+  localStorage.setItem(CHARACTER_STAGE_KEY, String(stage));
+}
+
+function syncCharacterStageState(level, { allowEvolution = false } = {}) {
+  const currentStage = getCharacterEvolutionStage(level).stage;
+  const previousStage = getStoredCharacterStage();
+
+  if (previousStage === null) {
+    saveStoredCharacterStage(currentStage);
+    return false;
+  }
+
+  if (currentStage > previousStage) {
+    saveStoredCharacterStage(currentStage);
+    return allowEvolution;
+  }
+
+  if (currentStage !== previousStage) {
+    saveStoredCharacterStage(currentStage);
+  }
+
+  return false;
+}
+
 function getCharacterImageCandidatesForLevel(level) {
   const stage = getCharacterEvolutionStage(level).stage;
+  const characterClass = getCharacterClass(progress.stats);
+  const fallbackStages = getFallbackCharacterImageStages(stage);
   const candidates = [
     getCharacterImagePath(level, progress.stats),
-    ...getFallbackCharacterImageStages(stage).map((imageStage) => `./assets/characters/str-stage-${imageStage}.png`),
+    ...fallbackStages.map((imageStage) => `./assets/characters/${characterClass}-stage-${imageStage}.png`),
+    ...fallbackStages.map((imageStage) => `./assets/characters/str-stage-${imageStage}.png`),
   ];
 
   return [...new Set(candidates)];
@@ -2102,7 +2141,7 @@ function completeQuest(questId, sourceElement) {
     titleHistory: updateTitleHistory(progress.titleHistory, previousLevel, nextLevel, completedAtIso),
   };
 
-  const shouldPlayEvolution = nextLevel > previousLevel && isEvolutionLevel(nextLevel, previousLevel);
+  const shouldPlayEvolution = nextLevel > previousLevel && syncCharacterStageState(nextLevel, { allowEvolution: true });
   if (shouldPlayEvolution) {
     queueCharacterEvolution();
   }
@@ -2560,7 +2599,7 @@ function devLevelUp() {
   };
 
   const nextLevel = getLevel(progress.xp);
-  const shouldPlayEvolution = nextLevel > previousLevel && isEvolutionLevel(nextLevel, previousLevel);
+  const shouldPlayEvolution = nextLevel > previousLevel && syncCharacterStageState(nextLevel, { allowEvolution: true });
   if (shouldPlayEvolution) {
     queueCharacterEvolution();
   }
@@ -3822,6 +3861,7 @@ function playEvolutionAnimation() {
   modal.classList.add("is-visible");
   enqueueToast(toast, {
     message,
+    duration: 950,
     timerName: "evolution",
   });
   document.body.classList.add("is-evolution-flash");
@@ -3832,7 +3872,7 @@ function playEvolutionAnimation() {
     modal.classList.remove("is-visible");
     modal.hidden = true;
     document.body.classList.remove("is-evolution-flash");
-  }, 1850);
+  }, 950);
 }
 
 function getToastTimerName(timerName) {
@@ -4611,6 +4651,7 @@ if (!isOnboardingVisible) {
 if (loginBonusResult.granted && !isOnboardingVisible) {
   showLoginBonusToast(loginBonusResult);
 }
+syncCharacterStageState(getLevel(progress.xp));
 sendWeeklyReport();
 const startupAchievements = checkAchievements({ showToast: false });
 if (startupAchievements.length > 0) {

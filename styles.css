@@ -639,6 +639,20 @@ h3 {
   margin-top: 5px;
 }
 
+.character-type-desc {
+  margin: 7px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(185, 137, 54, 0.26);
+  border-radius: 10px;
+  color: rgba(84, 57, 43, 0.88);
+  background:
+    linear-gradient(135deg, rgba(255, 247, 223, 0.42), rgba(238, 211, 154, 0.2));
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .sub-title-line strong,
 .character-type-line strong,
 .character-evolution-line strong {

@@ -23,6 +23,9 @@ const PARENT_PIN = "0718";
 const LOGIN_BONUS_GOLD = 10;
 const LOGIN_STREAK_BONUS_GOLD = 50;
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+const STAT_KEYS = ["STR", "INT", "END", "DEX"];
+const RECENT_STAT_HISTORY_LIMIT = 10;
+const RECENT_STAT_BONUS = 5;
 const ACHIEVEMENT_MENU_IDS = ["home", "quests", "growth", "rewards", "admin"];
 const QUEST_PRIORITY_ORDER = {
   high: 0,
@@ -85,6 +88,7 @@ const defaultProgress = {
     lastCompletedDate: "",
   },
   activityLog: [],
+  recentStatHistory: [],
   titleHistory: [],
   lastLoginBonusDate: "",
   loginStreak: 0,
@@ -405,6 +409,7 @@ function getDefaultProgressState() {
     completedQuestIds: [],
     streak: { ...defaultProgress.streak },
     activityLog: [],
+    recentStatHistory: [],
     titleHistory: [],
     questCompletedWeekdays: [],
     visitedScreens: [],
@@ -428,6 +433,7 @@ function loadProgress() {
       stats: normalizeStats(parsed.stats),
       streak: normalizeStreak(parsed.streak),
       activityLog: Array.isArray(parsed.activityLog) ? parsed.activityLog.map(normalizeActivityLogItem).filter(Boolean) : [],
+      recentStatHistory: normalizeRecentStatHistory(parsed.recentStatHistory, parsed.activityLog),
       titleHistory: Array.isArray(parsed.titleHistory) ? parsed.titleHistory.map(normalizeTitleHistoryItem).filter(Boolean) : [],
       lastLoginBonusDate: typeof parsed.lastLoginBonusDate === "string" ? parsed.lastLoginBonusDate : "",
       loginStreak: Number.isFinite(parsed.loginStreak) ? Math.max(0, Math.round(parsed.loginStreak)) : 0,
@@ -486,6 +492,31 @@ function normalizeStats(rawStats = {}) {
     END: Number.isFinite(rawStats.END) ? Math.max(0, Math.round(rawStats.END)) : 0,
     DEX: Number.isFinite(rawStats.DEX) ? Math.max(0, Math.round(rawStats.DEX)) : 0,
   };
+}
+
+function normalizeRecentStatHistory(rawHistory, fallbackActivityLog = []) {
+  const historySource = Array.isArray(rawHistory)
+    ? rawHistory
+    : Array.isArray(fallbackActivityLog)
+      ? fallbackActivityLog.map((item) => item?.stat)
+      : [];
+
+  return historySource
+    .map((stat) => String(stat || "").toUpperCase())
+    .filter((stat) => STAT_KEYS.includes(stat))
+    .slice(0, RECENT_STAT_HISTORY_LIMIT);
+}
+
+function removeRecentStatHistoryItem(history, stat) {
+  const normalizedHistory = normalizeRecentStatHistory(history);
+  const targetStat = STAT_KEYS.includes(stat) ? stat : "";
+  const removeIndex = normalizedHistory.findIndex((item) => item === targetStat);
+
+  if (removeIndex < 0) {
+    return normalizedHistory;
+  }
+
+  return normalizedHistory.filter((_, index) => index !== removeIndex);
 }
 
 function saveProgress() {
@@ -769,6 +800,7 @@ function reconcileProgressFromHistory(currentProgress) {
       currentProgress.totalChallengeCompletions || 0,
       currentProgress.activityLog.filter((item) => normalizeQuestCategory(item.category) === "challenge").length,
     ),
+    recentStatHistory: normalizeRecentStatHistory(currentProgress.recentStatHistory, currentProgress.activityLog),
     questCompletedWeekdays: normalizeNumberList(currentProgress.questCompletedWeekdays, 0, 6),
     visitedScreens: normalizeStringList(currentProgress.visitedScreens),
   };
@@ -1483,25 +1515,52 @@ function getCharacterClass(stats) {
   return getMainStat(stats).toLowerCase();
 }
 
-function getCharacterTypeLabel(stats) {
-  const labels = {
-    STR: "勇者タイプ",
-    INT: "賢者タイプ",
-    END: "守護者タイプ",
-    DEX: "技巧者タイプ",
-  };
+const characterTypeInfo = {
+  STR: {
+    label: "勇者タイプ",
+    desc: "行動力で道を切りひらく冒険者。",
+  },
+  INT: {
+    label: "賢者タイプ",
+    desc: "考える力で謎を解く知恵の冒険者。",
+  },
+  END: {
+    label: "守護者タイプ",
+    desc: "続ける力で仲間を支える冒険者。",
+  },
+  DEX: {
+    label: "技巧者タイプ",
+    desc: "工夫する力で道具を使いこなす冒険者。",
+  },
+};
 
-  return labels[getMainStat(stats)] || labels.STR;
+function getCharacterTypeInfo(stats) {
+  return characterTypeInfo[getMainStat(stats)] || characterTypeInfo.STR;
+}
+
+function getCharacterTypeLabel(stats) {
+  return getCharacterTypeInfo(stats).label;
 }
 
 function getMainStat(stats) {
   const normalizedStats = normalizeStats(stats);
-  const statOrder = ["STR", "INT", "END", "DEX"];
-  const maxValue = Math.max(...statOrder.map((stat) => normalizedStats[stat] || 0));
-  if (maxValue <= 0) {
+  const recentStatHistory = normalizeRecentStatHistory(progress?.recentStatHistory);
+  const hasBaseStats = STAT_KEYS.some((stat) => normalizedStats[stat] > 0);
+  const hasRecentStats = recentStatHistory.length > 0;
+
+  if (!hasBaseStats && !hasRecentStats) {
     return "STR";
   }
-  return statOrder.find((stat) => normalizedStats[stat] === maxValue) || "STR";
+
+  const scores = Object.fromEntries(
+    STAT_KEYS.map((stat) => {
+      const recentCount = recentStatHistory.filter((recentStat) => recentStat === stat).length;
+      return [stat, normalizedStats[stat] + recentCount * RECENT_STAT_BONUS];
+    }),
+  );
+  const maxScore = Math.max(...STAT_KEYS.map((stat) => scores[stat]));
+
+  return STAT_KEYS.find((stat) => scores[stat] === maxScore) || "STR";
 }
 
 function getCharacterEvolutionStage(level) {
@@ -2084,10 +2143,12 @@ function getCharacterImageCandidatesForLevel(level) {
 }
 
 function renderCharacterEvolutionInfo(level) {
-  setText("[data-character-type]", getCharacterTypeLabel(progress.stats));
+  const typeInfo = getCharacterTypeInfo(progress.stats);
+  setText("[data-character-type]", typeInfo.label);
+  setText("[data-character-type-desc]", typeInfo.desc);
   setText("[data-character-stage]", getCharacterEvolutionLabel(level));
   setText("[data-character-next-stage]", getNextEvolutionLabel(level));
-  setText("[data-character-fallback]", getCharacterTypeLabel(progress.stats).replace("タイプ", ""));
+  setText("[data-character-fallback]", typeInfo.label.replace("タイプ", ""));
 }
 
 function completeQuest(questId, sourceElement) {
@@ -2122,6 +2183,7 @@ function completeQuest(questId, sourceElement) {
       ...currentStats,
       [quest.stat]: currentStats[quest.stat] + 1,
     },
+    recentStatHistory: [quest.stat, ...normalizeRecentStatHistory(progress.recentStatHistory)].slice(0, RECENT_STAT_HISTORY_LIMIT),
     completedQuestIds: [...progress.completedQuestIds, getQuestCompletionKey(quest)],
     streak: updateStreakOnQuestComplete(progress.streak),
     activityLog: [
@@ -2246,6 +2308,7 @@ function undoQuestCompletion(questId) {
       ...currentStats,
       [quest.stat]: Math.max(0, currentStats[quest.stat] - 1),
     },
+    recentStatHistory: removeRecentStatHistoryItem(progress.recentStatHistory, quest.stat),
     completedQuestIds: progress.completedQuestIds.filter((id) => id !== completionKey),
     activityLog: nextActivityLog,
     streak: recalculateStreakFromActivityLog(nextActivityLog, progress.streak?.best || 0),

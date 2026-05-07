@@ -100,34 +100,108 @@ const defaultQuests = [
     id: "homework",
     type: "normal",
     category: "daily_required",
+    priority: "high",
     title: "宿題を終える",
     description: "今日の宿題を最後まで片づける。",
     frequency: "daily",
     stat: "INT",
     xpReward: 40,
-    goldReward: 30,
+    goldReward: 0,
   },
   {
-    id: "reading",
+    id: "prepare-tomorrow",
     type: "normal",
     category: "daily_required",
-    title: "音読をする",
-    description: "声に出して読み、聞いてもらう。",
-    frequency: "daily",
-    stat: "INT",
-    xpReward: 30,
-    goldReward: 20,
-  },
-  {
-    id: "help",
-    type: "normal",
-    category: "daily_required",
-    title: "お手伝いをする",
-    description: "家の中で一つ、誰かの助けになる。",
+    priority: "medium",
+    title: "明日の準備",
+    description: "時間割を見て、明日の持ち物をそろえる。",
     frequency: "daily",
     stat: "END",
-    xpReward: 35,
-    goldReward: 25,
+    xpReward: 20,
+    goldReward: 0,
+  },
+  {
+    id: "brush-teeth",
+    type: "normal",
+    category: "daily_required",
+    priority: "medium",
+    title: "歯みがき",
+    description: "寝る前にていねいに歯をみがく。",
+    frequency: "daily",
+    stat: "END",
+    xpReward: 10,
+    goldReward: 0,
+  },
+  {
+    id: "dog-care",
+    type: "normal",
+    category: "challenge",
+    priority: "medium",
+    title: "犬のお世話",
+    description: "ごはんや水、トイレなどのお世話をする。",
+    frequency: "daily",
+    stat: "END",
+    xpReward: 10,
+    goldReward: 10,
+  },
+  {
+    id: "clear-dishes",
+    type: "normal",
+    category: "challenge",
+    priority: "medium",
+    title: "食器を片づける",
+    description: "食べ終わった食器を片づける。",
+    frequency: "daily",
+    stat: "DEX",
+    xpReward: 10,
+    goldReward: 10,
+  },
+  {
+    id: "fold-laundry",
+    type: "normal",
+    category: "challenge",
+    priority: "low",
+    title: "洗濯物をたたむ",
+    description: "洗濯物をたたんで、決まった場所に置く。",
+    frequency: "daily",
+    stat: "DEX",
+    xpReward: 15,
+    goldReward: 15,
+  },
+  {
+    id: "read-book",
+    type: "normal",
+    category: "challenge",
+    priority: "low",
+    title: "本を読む",
+    description: "好きな本を読んで、少しだけ感想を話す。",
+    frequency: "daily",
+    stat: "INT",
+    xpReward: 20,
+    goldReward: 5,
+  },
+];
+
+const defaultRewards = [
+  {
+    id: "game-10min",
+    name: "ゲーム時間 +10分",
+    cost: 30,
+  },
+  {
+    id: "game-20min",
+    name: "ゲーム時間 +20分",
+    cost: 60,
+  },
+  {
+    id: "favorite-snack",
+    name: "好きなおやつ",
+    cost: 80,
+  },
+  {
+    id: "holiday-special-play",
+    name: "休日の特別遊び",
+    cost: 150,
   },
 ];
 
@@ -258,13 +332,13 @@ const characterStages = [
 ];
 
 const characterEvolutionStages = [
-  { stage: 1, minLevel: 1, maxLevel: 9, label: "見習い" },
-  { stage: 2, minLevel: 10, maxLevel: 24, label: "駆け出し冒険者" },
-  { stage: 3, minLevel: 25, maxLevel: 49, label: "一人前の冒険者" },
-  { stage: 4, minLevel: 50, maxLevel: 74, label: "熟練冒険者" },
-  { stage: 5, minLevel: 75, maxLevel: 100, label: "伝説の冒険者" },
+  { stage: 1, minLevel: 1, maxLevel: 14, label: "見習い" },
+  { stage: 2, minLevel: 15, maxLevel: 34, label: "駆け出し冒険者" },
+  { stage: 3, minLevel: 35, maxLevel: 59, label: "一人前の冒険者" },
+  { stage: 4, minLevel: 60, maxLevel: 84, label: "熟練冒険者" },
+  { stage: 5, minLevel: 85, maxLevel: 100, label: "伝説の冒険者" },
 ];
-const characterImageStages = [1, 3, 5];
+const characterImageStages = [1, 2, 3, 4, 5];
 
 let progress = loadProgress();
 let managedQuests = loadManagedQuests();
@@ -282,7 +356,12 @@ let questCompleteTimer;
 let loginBonusTimer;
 let appReminderTimer;
 let achievementToastTimer;
+let toastQueueTimer;
+let toastQueueActive = false;
+const toastQueue = [];
+const toastTimers = {};
 const TOAST_DURATION = 1700;
+const TOAST_QUEUE_GAP = 140;
 const LEVEL_UP_SOUND_DELAY = 240;
 const ACHIEVEMENT_SOUND_DELAY = 420;
 let pendingCompleteQuestId = "";
@@ -917,8 +996,10 @@ function normalizeScheduleDays(rawDays) {
 }
 
 function normalizeQuest(rawQuest) {
-  const xpReward = Number(rawQuest.xpReward);
-  const goldReward = Number(rawQuest.goldReward);
+  const rawXpReward = rawQuest.xpReward;
+  const rawGoldReward = rawQuest.goldReward;
+  const xpReward = rawXpReward === "" || rawXpReward === null || rawXpReward === undefined ? NaN : Number(rawXpReward);
+  const goldReward = rawGoldReward === "" || rawGoldReward === null || rawGoldReward === undefined ? NaN : Number(rawGoldReward);
   const title = String(rawQuest.title || "").trim();
   const type = ["normal", "urgent", "boss"].includes(rawQuest.type) ? rawQuest.type : "normal";
   const category = ["daily_required", "challenge"].includes(rawQuest.category) ? rawQuest.category : "daily_required";
@@ -949,6 +1030,10 @@ function normalizeQuest(rawQuest) {
 
 function getDefaultManagedQuests() {
   return defaultQuests.map((quest) => normalizeQuest({ ...quest, createdBy: "system" })).filter(Boolean);
+}
+
+function getDefaultRewards() {
+  return defaultRewards.map(normalizeReward).filter(Boolean);
 }
 
 function loadLegacyCustomQuests() {
@@ -994,7 +1079,7 @@ function loadManagedQuests() {
     return testQuests;
   }
 
-  return [];
+  return getDefaultManagedQuests();
 }
 
 function saveManagedQuests() {
@@ -1019,7 +1104,7 @@ function loadRewards() {
   try {
     const stored = localStorage.getItem(REWARDS_KEY);
     if (!stored) {
-      return [];
+      return getDefaultRewards();
     }
 
     const parsed = JSON.parse(stored);
@@ -1447,7 +1532,7 @@ function getNextEvolutionLabel(level) {
 
 function getCharacterImagePath(level, stats) {
   const stage = getCharacterEvolutionStage(level);
-  return `./assets/characters/${getCharacterClass(stats)}-stage-${stage.stage}.png`;
+  return `./assets/characters/str-stage-${stage.stage}.png`;
 }
 
 function getFallbackCharacterImageStages(stage) {
@@ -1623,6 +1708,14 @@ function getEstimatedQuestCountToLevel(xp) {
   const averageXp =
     getAllQuests().reduce((total, quest) => total + quest.xpReward, 0) / Math.max(getAllQuests().length, 1);
   return Math.max(1, Math.ceil(getXpToNextLevel(xp) / Math.max(averageXp, 1)));
+}
+
+function renderQuestRewardBadges(quest) {
+  return `
+    <span class="reward-badge">XP +${quest.xpReward}</span>
+    ${quest.goldReward > 0 ? `<span class="reward-badge">Gold +${quest.goldReward}</span>` : ""}
+    <span class="stat-reward-badge stat-${quest.stat}">${getStatLabel(quest.stat)} +1</span>
+  `;
 }
 
 function makeAchievement(id, name, description, conditionText, icon, isUnlocked, getProgress = null) {
@@ -1889,14 +1982,11 @@ function showAchievementToast(achievements) {
     achievements.length === 1
       ? `実績解除！ ${achievements[0].name}`
       : `実績解除！ ${achievements.length}件の実績を達成`;
-  toast.textContent = message;
-  toast.classList.remove("is-visible");
-  void toast.offsetWidth;
-  toast.classList.add("is-visible");
   window.setTimeout(() => playSound("achievement"), ACHIEVEMENT_SOUND_DELAY);
-
-  window.clearTimeout(achievementToastTimer);
-  achievementToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), TOAST_DURATION);
+  enqueueToast(toast, {
+    message,
+    timerName: "achievement",
+  });
 }
 
 function markScreenVisited(screenId) {
@@ -1946,10 +2036,8 @@ function isEvolutionLevel(level, previousLevel = level - 1) {
 
 function getCharacterImageCandidatesForLevel(level) {
   const stage = getCharacterEvolutionStage(level).stage;
-  const characterClass = getCharacterClass(progress.stats);
   const candidates = [
     getCharacterImagePath(level, progress.stats),
-    ...getFallbackCharacterImageStages(stage).map((imageStage) => `./assets/characters/${characterClass}-stage-${imageStage}.png`),
     ...getFallbackCharacterImageStages(stage).map((imageStage) => `./assets/characters/str-stage-${imageStage}.png`),
   ];
 
@@ -2379,7 +2467,7 @@ function applyResetTarget(target) {
     BACKUP_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     progress = getDefaultProgressState();
     managedQuests = getDefaultManagedQuests();
-    rewards = [];
+    rewards = getDefaultRewards();
     rewardHistory = [];
     unlockedAchievements = [];
     weeklyReportHistory = [];
@@ -2623,7 +2711,7 @@ function handleQuestCreateSubmit(event) {
     goldReward: formData.get("gold"),
   });
 
-  if (!quest || quest.xpReward <= 0 || quest.goldReward <= 0) {
+  if (!quest || quest.xpReward <= 0 || quest.goldReward < 0) {
     if (message) {
       message.textContent = "クエスト名、XP、Goldを入力してください";
     }
@@ -2815,7 +2903,7 @@ function renderQuestManager() {
             </label>
             <label>
               Gold
-              <input type="number" name="gold" inputmode="numeric" min="1" max="999" value="${quest.goldReward}" required>
+              <input type="number" name="gold" inputmode="numeric" min="0" max="999" value="${quest.goldReward}" required>
             </label>
           </div>
           <p class="form-message" data-edit-quest-message aria-live="polite"></p>
@@ -2839,9 +2927,7 @@ function renderQuestManager() {
           </div>
           <p>${escapeHtml(quest.description)}</p>
           <div class="reward-row">
-            <span class="reward-badge">XP +${quest.xpReward}</span>
-            <span class="reward-badge">Gold +${quest.goldReward}</span>
-            <span class="stat-reward-badge stat-${quest.stat}">${getStatLabel(quest.stat)} +1</span>
+            ${renderQuestRewardBadges(quest)}
           </div>
         </div>
         <div class="managed-quest-actions">
@@ -2884,7 +2970,7 @@ function handleQuestEditSubmit(event) {
   });
   const message = form.querySelector("[data-edit-quest-message]");
 
-  if (!quest || quest.xpReward <= 0 || quest.goldReward <= 0) {
+  if (!quest || quest.xpReward <= 0 || quest.goldReward < 0) {
     if (message) {
       message.textContent = "クエスト名、XP、Goldを入力してください";
     }
@@ -3296,9 +3382,7 @@ function renderQuests() {
       </div>
       <p class="quest-description">${escapeHtml(quest.description)}</p>
       <div class="reward-row">
-        <span class="reward-badge">XP +${quest.xpReward}</span>
-        <span class="reward-badge">Gold +${quest.goldReward}</span>
-        <span class="stat-reward-badge stat-${quest.stat}">${getStatLabel(quest.stat)} +1</span>
+        ${renderQuestRewardBadges(quest)}
       </div>
       <button class="complete-button" type="button" data-complete="${quest.id}" ${completed ? "disabled" : ""}>
         ${completed ? "達成済み" : "挑戦する"}
@@ -3684,7 +3768,6 @@ function playLevelUpAnimation() {
   levelPanel.classList.remove("is-level-up");
   characterFrame?.classList.remove("is-level-up");
   characterImage?.classList.remove("is-level-up");
-  levelUpToast.classList.remove("is-visible");
   void levelPanel.offsetWidth;
   document.body.classList.add("is-level-up-flash");
   levelPanel.classList.add("is-level-up");
@@ -3692,7 +3775,7 @@ function playLevelUpAnimation() {
   if (characterImage && characterImage.dataset.evolutionPending !== "true") {
     characterImage.classList.add("is-level-up");
   }
-  levelUpToast.classList.add("is-visible");
+  enqueueToast(levelUpToast);
   window.setTimeout(() => playSound("levelUp"), LEVEL_UP_SOUND_DELAY);
 
   window.clearTimeout(levelUpTimer);
@@ -3701,7 +3784,6 @@ function playLevelUpAnimation() {
     levelPanel.classList.remove("is-level-up");
     characterFrame?.classList.remove("is-level-up");
     characterImage?.classList.remove("is-level-up");
-    levelUpToast.classList.remove("is-visible");
   }, TOAST_DURATION);
 }
 
@@ -3738,7 +3820,10 @@ function playEvolutionAnimation() {
   document.body.classList.remove("is-evolution-flash");
   void modal.offsetWidth;
   modal.classList.add("is-visible");
-  toast.classList.add("is-visible");
+  enqueueToast(toast, {
+    message,
+    timerName: "evolution",
+  });
   document.body.classList.add("is-evolution-flash");
   window.setTimeout(() => playSound("achievement"), 220);
 
@@ -3746,9 +3831,71 @@ function playEvolutionAnimation() {
   evolutionTimer = window.setTimeout(() => {
     modal.classList.remove("is-visible");
     modal.hidden = true;
-    toast.classList.remove("is-visible");
     document.body.classList.remove("is-evolution-flash");
   }, 1850);
+}
+
+function getToastTimerName(timerName) {
+  return {
+    reward: "rewardToastTimer",
+    loginBonus: "loginBonusTimer",
+    appReminder: "appReminderTimer",
+    achievement: "achievementToastTimer",
+    clear: "clearToastTimer",
+    levelUp: "levelUpTimer",
+    evolution: "evolutionTimer",
+  }[timerName];
+}
+
+function clearNamedToastTimer(timerName) {
+  const timerKey = getToastTimerName(timerName);
+  if (!timerKey) {
+    return;
+  }
+  window.clearTimeout(toastTimers[timerKey]);
+}
+
+function setNamedToastTimer(timerName, timerId) {
+  const timerKey = getToastTimerName(timerName);
+  if (!timerKey) {
+    return;
+  }
+  toastTimers[timerKey] = timerId;
+}
+
+function enqueueToast(toast, { message, duration = TOAST_DURATION, timerName = "", beforeShow = null, afterHide = null } = {}) {
+  if (!toast) {
+    return;
+  }
+
+  toastQueue.push({ toast, message, duration, timerName, beforeShow, afterHide });
+  runToastQueue();
+}
+
+function runToastQueue() {
+  if (toastQueueActive || toastQueue.length === 0) {
+    return;
+  }
+
+  const item = toastQueue.shift();
+  toastQueueActive = true;
+  const { toast, message, duration, timerName, beforeShow, afterHide } = item;
+  if (message !== undefined) {
+    toast.textContent = message;
+  }
+  clearNamedToastTimer(timerName);
+  beforeShow?.(toast);
+  toast.classList.remove("is-visible");
+  void toast.offsetWidth;
+  toast.classList.add("is-visible");
+
+  const timerId = window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+    afterHide?.(toast);
+    toastQueueActive = false;
+    toastQueueTimer = window.setTimeout(runToastQueue, TOAST_QUEUE_GAP);
+  }, duration);
+  setNamedToastTimer(timerName, timerId);
 }
 
 function showRewardFeedback(quest) {
@@ -3757,19 +3904,17 @@ function showRewardFeedback(quest) {
     return;
   }
 
-  toast.textContent =
+  const rewardText = `XP +${quest.xpReward}${quest.goldReward > 0 ? ` / Gold +${quest.goldReward}` : ""}`;
+  const message =
     quest.category === "challenge"
-      ? `追加依頼達成！ ボーナス獲得！ XP +${quest.xpReward} / Gold +${quest.goldReward}`
-      : `クエスト達成！ XP +${quest.xpReward} / Gold +${quest.goldReward}`;
-  toast.classList.toggle("is-challenge", quest.category === "challenge");
-  toast.classList.remove("is-visible");
-  void toast.offsetWidth;
-  toast.classList.add("is-visible");
-
-  window.clearTimeout(rewardToastTimer);
-  rewardToastTimer = window.setTimeout(() => {
-    toast.classList.remove("is-visible", "is-challenge");
-  }, TOAST_DURATION);
+      ? `追加依頼達成！ ボーナス獲得！ ${rewardText}`
+      : `クエスト達成！ ${rewardText}`;
+  enqueueToast(toast, {
+    message,
+    timerName: "reward",
+    beforeShow: (element) => element.classList.toggle("is-challenge", quest.category === "challenge"),
+    afterHide: (element) => element.classList.remove("is-challenge"),
+  });
 }
 
 function playLoginBonusToast(message, duration = TOAST_DURATION) {
@@ -3778,13 +3923,11 @@ function playLoginBonusToast(message, duration = TOAST_DURATION) {
     return;
   }
 
-  toast.textContent = message;
-  toast.classList.remove("is-visible");
-  void toast.offsetWidth;
-  toast.classList.add("is-visible");
-
-  window.clearTimeout(loginBonusTimer);
-  loginBonusTimer = window.setTimeout(() => toast.classList.remove("is-visible"), duration);
+  enqueueToast(toast, {
+    message,
+    duration,
+    timerName: "loginBonus",
+  });
 }
 
 function showAppReminderToast() {
@@ -3798,13 +3941,10 @@ function showAppReminderToast() {
     return;
   }
 
-  toast.textContent = `今日の任務が${summary.remainingCount}つ残っています`;
-  toast.classList.remove("is-visible");
-  void toast.offsetWidth;
-  toast.classList.add("is-visible");
-
-  window.clearTimeout(appReminderTimer);
-  appReminderTimer = window.setTimeout(() => toast.classList.remove("is-visible"), TOAST_DURATION);
+  enqueueToast(toast, {
+    message: `今日の任務が${summary.remainingCount}つ残っています`,
+    timerName: "appReminder",
+  });
 }
 
 function showLoginBonusToast(loginBonusResult) {
@@ -3823,8 +3963,8 @@ function appendGainBadges(layer, quest) {
 
   [
     { label: `+${quest.xpReward}XP`, type: "xp" },
-    { label: `+${quest.goldReward}G`, type: "gold" },
-  ].forEach((gain, index) => {
+    quest.goldReward > 0 ? { label: `+${quest.goldReward}G`, type: "gold" } : null,
+  ].filter(Boolean).forEach((gain, index) => {
     const badge = document.createElement("span");
     badge.className = `gain-float gain-float-${gain.type}`;
     badge.textContent = gain.label;
@@ -3863,13 +4003,10 @@ function showClearFeedback() {
 
   const messages = ["達成！", "よくやった！"];
   const messageIndex = Math.max(progress.completedQuestIds.length - 1, 0) % messages.length;
-  toast.textContent = messages[messageIndex];
-  toast.classList.remove("is-visible");
-  void toast.offsetWidth;
-  toast.classList.add("is-visible");
-
-  window.clearTimeout(clearToastTimer);
-  clearToastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), TOAST_DURATION);
+  enqueueToast(toast, {
+    message: messages[messageIndex],
+    timerName: "clear",
+  });
 }
 
 function renderGrowthRecord(level, title) {

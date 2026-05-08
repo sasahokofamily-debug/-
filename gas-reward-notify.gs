@@ -6,14 +6,19 @@ const WEEKLY_REPORT_HEADERS = [
   "保存日時",
   "週の開始日",
   "週の終了日",
-  "クエスト達成数",
+  "プレイヤー名",
+  "達成クエスト数",
   "獲得XP",
   "獲得Gold",
-  "STR増加",
-  "INT増加",
-  "END増加",
-  "DEX増加",
+  "現在レベル",
+  "STR",
+  "INT",
+  "END",
+  "DEX",
   "連続ログイン日数",
+  "キャラクタータイプ",
+  "キャラクターStage",
+  "今週もっとも伸びたステータス",
 ];
 
 // 必要なGAS権限:
@@ -113,13 +118,16 @@ function saveWeeklyReport(data) {
     END: data.endGain,
     DEX: data.dexGain,
   });
+  const currentLevel = Number(data.currentLevel ?? data.level ?? 1);
+  const character = normalizeCharacterInfo(data, stats, currentLevel);
 
   const report = {
     name: data.name || "そら",
     completed: Number(data.questsCompleted ?? data.completed ?? 0),
     xp: Number(data.xpEarned ?? data.xp ?? 0),
     gold: Number(data.goldEarned ?? data.gold ?? 0),
-    currentLevel: Number(data.currentLevel ?? data.level ?? 1),
+    currentLevel,
+    character,
     stats,
     statGrowth: data.statGrowth || formatStatGrowth(stats),
     loginStreak: Number(data.loginStreak || 0),
@@ -157,6 +165,7 @@ function sendWeeklyReportEmail() {
     xp: 0,
     gold: 0,
     currentLevel: 1,
+    character: normalizeCharacterInfo({}, { STR: 0, INT: 0, END: 0, DEX: 0 }, 1),
     stats: { STR: 0, INT: 0, END: 0, DEX: 0 },
     statGrowth: "まだありません",
     loginStreak: 0,
@@ -171,6 +180,7 @@ function sendWeeklyReportEmail() {
   }
   const hasRecord = isCurrentWeek && (safeReport.completed > 0 || safeReport.xp > 0 || safeReport.gold > 0);
   const stats = normalizeStats(safeReport.stats);
+  const character = normalizeCharacterInfo(safeReport.character || {}, stats, safeReport.currentLevel || 1);
   const subject = "【ギルド週報】今週の冒険レポート";
   const plainText = hasRecord
     ? [
@@ -183,6 +193,10 @@ function sendWeeklyReportEmail() {
         `獲得XP：${safeReport.xp} XP`,
         `獲得Gold：${safeReport.gold} G`,
         `現在レベル：Lv${Number(safeReport.currentLevel || 1)}`,
+        `キャラクター：${character.typeLabel}`,
+        `進化段階：Stage ${character.stage} ${character.stageLabel}`,
+        `称号：${character.title}`,
+        `今週もっとも成長した力：${character.topWeeklyStatText}`,
         `STR：${stats.STR} / INT：${stats.INT} / END：${stats.END} / DEX：${stats.DEX}`,
         `連続ログイン：${safeReport.loginStreak}日`,
         "",
@@ -218,19 +232,25 @@ function saveWeeklyReportToSheet(report) {
 
     const sheet = getOrCreateWeeklyReportSheet(spreadsheet);
     const stats = normalizeStats(report.stats);
+    const character = normalizeCharacterInfo(report.character || {}, stats, report.currentLevel || 1);
     const nextRow = sheet.getLastRow() + 1;
     sheet.getRange(nextRow, 1, 1, WEEKLY_REPORT_HEADERS.length).setValues([[
       report.savedAt,
       report.weekStart,
       report.weekEnd || getWeekEndKey(report.weekStart),
+      report.name || "そら",
       Number(report.completed || 0),
       Number(report.xp || 0),
       Number(report.gold || 0),
+      Number(report.currentLevel || 1),
       Number(stats.STR || 0),
       Number(stats.INT || 0),
       Number(stats.END || 0),
       Number(stats.DEX || 0),
       Number(report.loginStreak || 0),
+      character.typeLabel,
+      `Stage ${character.stage} ${character.stageLabel}`,
+      character.topWeeklyStatText,
     ]]);
     formatWeeklyReportSheet(sheet);
   } catch (error) {
@@ -249,9 +269,66 @@ function getOrCreateWeeklyReportSheet(spreadsheet) {
   const sheet = spreadsheet.getSheetByName("weekly_reports") || spreadsheet.insertSheet("weekly_reports");
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, WEEKLY_REPORT_HEADERS.length).setValues([WEEKLY_REPORT_HEADERS]);
+  } else {
+    ensureWeeklyReportHeaderSchema(sheet);
   }
   formatWeeklyReportSheet(sheet);
   return sheet;
+}
+
+function ensureWeeklyReportHeaderSchema(sheet) {
+  const lastColumn = Math.max(sheet.getLastColumn(), WEEKLY_REPORT_HEADERS.length);
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const isCurrentSchema = WEEKLY_REPORT_HEADERS.every((header, index) => headers[index] === header);
+
+  if (isCurrentSchema) {
+    return;
+  }
+
+  const isLegacySchema =
+    headers[0] === "保存日時" &&
+    headers[1] === "週の開始日" &&
+    headers[2] === "週の終了日" &&
+    headers[3] === "クエスト達成数" &&
+    headers[10] === "連続ログイン日数";
+
+  if (isLegacySchema && sheet.getLastRow() > 1) {
+    migrateLegacyWeeklyReportRows(sheet);
+    return;
+  }
+
+  sheet.getRange(1, 1, 1, WEEKLY_REPORT_HEADERS.length).setValues([WEEKLY_REPORT_HEADERS]);
+}
+
+function migrateLegacyWeeklyReportRows(sheet) {
+  const lastRow = sheet.getLastRow();
+  const oldColumnCount = Math.max(sheet.getLastColumn(), 11);
+  const oldValues = sheet.getRange(1, 1, lastRow, oldColumnCount).getValues();
+  const migratedValues = [WEEKLY_REPORT_HEADERS];
+
+  for (let rowIndex = 1; rowIndex < oldValues.length; rowIndex += 1) {
+    const row = oldValues[rowIndex];
+    migratedValues.push([
+      row[0],
+      row[1],
+      row[2],
+      "そら",
+      Number(row[3] || 0),
+      Number(row[4] || 0),
+      Number(row[5] || 0),
+      "",
+      Number(row[6] || 0),
+      Number(row[7] || 0),
+      Number(row[8] || 0),
+      Number(row[9] || 0),
+      Number(row[10] || 0),
+      "",
+      "",
+      "",
+    ]);
+  }
+
+  sheet.getRange(1, 1, lastRow, WEEKLY_REPORT_HEADERS.length).setValues(migratedValues);
 }
 
 function formatWeeklyReportSheet(sheet) {
@@ -274,7 +351,9 @@ function formatWeeklyReportSheet(sheet) {
     const dataRange = sheet.getRange(2, 1, lastRow - 1, lastColumn);
     dataRange.setVerticalAlignment("middle");
     sheet.getRange(2, 1, lastRow - 1, 3).setNumberFormat("yyyy/mm/dd").setHorizontalAlignment("center");
-    sheet.getRange(2, 4, lastRow - 1, 8).setHorizontalAlignment("center");
+    sheet.getRange(2, 4, lastRow - 1, 1).setHorizontalAlignment("center");
+    sheet.getRange(2, 5, lastRow - 1, 9).setNumberFormat("0").setHorizontalAlignment("center");
+    sheet.getRange(2, 14, lastRow - 1, 3).setHorizontalAlignment("center");
   }
 
   sheet.autoResizeColumns(1, lastColumn);
@@ -330,6 +409,7 @@ function buildWeeklyReportHtml(report, hasRecord) {
   const stats = normalizeStats(report.stats);
   const period = `${report.weekStart || ""} 〜 ${report.weekEnd || getWeekEndKey(report.weekStart) || ""}`;
   const currentLevel = Number(report.currentLevel || report.level || 1);
+  const character = normalizeCharacterInfo(report.character || {}, stats, currentLevel);
   const message = hasRecord
     ? "今週もよくがんばりました。来週の冒険も楽しみです。"
     : "今週の記録はありません。次の冒険の準備をして、また少しずつ進めましょう。";
@@ -346,6 +426,16 @@ function buildWeeklyReportHtml(report, hasRecord) {
             冒険者 <strong style="font-size:20px;color:#2f2118;">${escapeHtml(formatAdventurerName(report.name))}</strong> の<br>
             <strong style="color:#7a241f;">今週の冒険レポート</strong> が届きました。
           </p>
+
+          <div style="margin:20px 0;padding:16px;border:1px solid rgba(139,101,48,0.42);border-radius:12px;background:#fff0cf;box-shadow:inset 0 1px 0 rgba(255,255,255,0.55);">
+            <h2 style="margin:0 0 12px;color:#6b4526;font-size:18px;line-height:1.35;">現在の冒険者</h2>
+            <table role="presentation" style="width:100%;border-collapse:collapse;">
+              ${buildWeeklyReportRow("タイプ", character.typeLabel, "#7a241f")}
+              ${buildWeeklyReportRow("進化段階", `Stage ${character.stage} ${character.stageLabel}`, "#8a6524")}
+              ${buildWeeklyReportRow("称号", character.title, "#2f2118")}
+              ${buildWeeklyReportRow("今週もっとも成長した力", character.topWeeklyStatText, "#37613b")}
+            </table>
+          </div>
 
           <div style="margin:20px 0;padding:16px;border:1px solid rgba(139,101,48,0.42);border-radius:12px;background:#f8e8c6;box-shadow:inset 0 1px 0 rgba(255,255,255,0.55);">
             <h2 style="margin:0 0 12px;color:#6b4526;font-size:18px;line-height:1.35;">今週の冒険記録</h2>
@@ -452,6 +542,28 @@ function formatAdventurerName(name) {
   return /(?:くん|さん|ちゃん|君|様)$/.test(safeName) ? safeName : `${safeName}くん`;
 }
 
+function normalizeCharacterInfo(data, stats, currentLevel) {
+  const source = data || {};
+  const type = String(source.characterType || source.type || getStrongestStat(stats)).toUpperCase();
+  const stage = Number(source.characterStage || source.stage || getCharacterStageFromLevel(currentLevel));
+  const stageLabel = source.characterStageLabel || source.stageLabel || getCharacterStageLabel(stage);
+  const topWeeklyStat = String(source.topWeeklyStat || "").toUpperCase();
+  const topWeeklyStatValue = Number(source.topWeeklyStatValue || 0);
+  const topWeeklyStatLabel = source.topWeeklyStatLabel || getStatLabel(topWeeklyStat);
+  const topWeeklyStatText = source.topWeeklyStatText || (topWeeklyStat && topWeeklyStatValue > 0
+    ? `${topWeeklyStat} / ${topWeeklyStatLabel} +${topWeeklyStatValue}`
+    : "今週の成長記録はまだありません");
+
+  return {
+    type,
+    typeLabel: source.characterTypeLabel || source.typeLabel || getCharacterTypeLabel(type),
+    stage,
+    stageLabel,
+    title: source.characterTitle || source.title || getWeeklyReportTitle(currentLevel),
+    topWeeklyStatText,
+  };
+}
+
 function normalizeStats(stats) {
   return {
     STR: Number(stats && stats.STR ? stats.STR : 0),
@@ -459,6 +571,64 @@ function normalizeStats(stats) {
     END: Number(stats && stats.END ? stats.END : 0),
     DEX: Number(stats && stats.DEX ? stats.DEX : 0),
   };
+}
+
+function getStrongestStat(stats) {
+  const normalizedStats = normalizeStats(stats);
+  return ["STR", "INT", "END", "DEX"].reduce((bestStat, stat) => {
+    const bestValue = Number(normalizedStats[bestStat] || 0);
+    const value = Number(normalizedStats[stat] || 0);
+    return value > bestValue ? stat : bestStat;
+  }, "STR");
+}
+
+function getCharacterTypeLabel(type) {
+  const labels = {
+    STR: "勇者タイプ",
+    INT: "賢者タイプ",
+    END: "守護者タイプ",
+    DEX: "技巧者タイプ",
+  };
+  return labels[type] || labels.STR;
+}
+
+function getCharacterStageFromLevel(level) {
+  const safeLevel = Math.max(1, Number(level || 1));
+  if (safeLevel >= 85) return 5;
+  if (safeLevel >= 60) return 4;
+  if (safeLevel >= 35) return 3;
+  if (safeLevel >= 15) return 2;
+  return 1;
+}
+
+function getCharacterStageLabel(stage) {
+  const labels = {
+    1: "見習い",
+    2: "駆け出し",
+    3: "一人前",
+    4: "熟練",
+    5: "伝説",
+  };
+  return labels[stage] || labels[1];
+}
+
+function getWeeklyReportTitle(level) {
+  const safeLevel = Math.max(1, Number(level || 1));
+  if (safeLevel >= 85) return "伝説級冒険者";
+  if (safeLevel >= 60) return "熟練冒険者";
+  if (safeLevel >= 35) return "一人前の冒険者";
+  if (safeLevel >= 15) return "若き冒険者";
+  return "見習い冒険者";
+}
+
+function getStatLabel(stat) {
+  const labels = {
+    STR: "力",
+    INT: "賢さ",
+    END: "忍耐力",
+    DEX: "器用さ",
+  };
+  return labels[stat] || "";
 }
 
 function formatStatGrowth(stats) {

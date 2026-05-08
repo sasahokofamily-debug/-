@@ -1308,14 +1308,34 @@ function createWeeklyReportPayload() {
   const report = getWeeklyReport();
   const stats = report.stats;
   const weekStart = getWeekKey();
+  const currentLevel = getLevel(progress.xp);
+  const characterStage = getCharacterEvolutionStage(currentLevel);
+  const characterType = getMainStat(progress.stats);
+  const characterInfo = getCharacterTypeInfo(progress.stats);
+  const currentTitle = getTitle(currentLevel);
+  const topWeeklyStat = STAT_KEYS.reduce((bestStat, stat) => {
+    const bestValue = Number(stats[bestStat] || 0);
+    const value = Number(stats[stat] || 0);
+    return value > bestValue ? stat : bestStat;
+  }, "STR");
+  const topWeeklyStatValue = Number(stats[topWeeklyStat] || 0);
 
   return {
+    name: progress.name || "そら",
     weekStart,
     weekEnd: getWeekEndKey(weekStart),
     questsCompleted: report.completed,
     xpEarned: report.xp,
     goldEarned: report.gold,
-    currentLevel: getLevel(progress.xp),
+    currentLevel,
+    characterType,
+    characterTypeLabel: characterInfo.label,
+    characterStage: characterStage.stage,
+    characterStageLabel: characterStage.label,
+    characterTitle: currentTitle.name,
+    topWeeklyStat: topWeeklyStatValue > 0 ? topWeeklyStat : "",
+    topWeeklyStatLabel: topWeeklyStatValue > 0 ? getStatLabel(topWeeklyStat) : "",
+    topWeeklyStatValue,
     strGain: stats.STR || 0,
     intGain: stats.INT || 0,
     endGain: stats.END || 0,

@@ -1583,6 +1583,16 @@ function getStatLabel(stat) {
   return labels[stat] || labels.END;
 }
 
+function getCharacterTypeLabelByStat(stat) {
+  const labels = {
+    STR: "勇者タイプ",
+    INT: "賢者タイプ",
+    END: "守護者タイプ",
+    DEX: "技巧者タイプ",
+  };
+  return labels[stat] || labels.STR;
+}
+
 function getSubTitle(stats) {
   const normalizedStats = normalizeStats(stats);
   const entries = Object.entries(normalizedStats);
@@ -1890,12 +1900,17 @@ function renderQuestRewardBadges(quest) {
   `;
 }
 
-function makeAchievement(id, name, description, conditionText, icon, isUnlocked, getProgress = null) {
+function makeAchievement(id, name, description, conditionText, icon, isUnlocked, getProgress = null, meta = {}) {
   return {
     id,
     title: name,
     name,
     description,
+    category: meta.category || id.split("-")[0] || "general",
+    conditionType: meta.conditionType || id.split("-")[0] || "custom",
+    targetValue: meta.targetValue ?? null,
+    rewardXP: meta.rewardXP || 0,
+    rewardGold: meta.rewardGold || 0,
     condition: conditionText,
     conditionText,
     icon,
@@ -1904,16 +1919,31 @@ function makeAchievement(id, name, description, conditionText, icon, isUnlocked,
   };
 }
 
-function makeMilestoneAchievements({ prefix, milestones, names, description, conditionLabel, icon, getCurrent, unit }) {
+function getAchievementName(names, target, index, fallback) {
+  if (typeof names === "function") {
+    return names(target, index);
+  }
+  if (Array.isArray(names) && names[index]) {
+    return names[index];
+  }
+  return fallback;
+}
+
+function makeMilestoneAchievements({ prefix, milestones, names, description, conditionLabel, icon, getCurrent, unit, category, conditionType }) {
   return milestones.map((target, index) =>
     makeAchievement(
       `${prefix}-${target}`,
-      names[index],
+      getAchievementName(names, target, index, `${conditionLabel}${target}${unit}`),
       description,
       `${conditionLabel}${target}${unit}`,
       icon,
       (ctx) => getCurrent(ctx) >= target,
       (ctx) => ({ current: getCurrent(ctx), target, unit }),
+      {
+        category: category || prefix,
+        conditionType: conditionType || prefix,
+        targetValue: target,
+      },
     ),
   );
 }
@@ -1921,8 +1951,8 @@ function makeMilestoneAchievements({ prefix, milestones, names, description, con
 const ACHIEVEMENTS = [
   ...makeMilestoneAchievements({
     prefix: "quest",
-    milestones: [1, 5, 10, 30, 50, 100, 200, 300, 500, 1000],
-    names: ["最初の依頼", "五つの任務", "十の足あと", "依頼三十番", "努力の星", "百の依頼", "二百の記録", "こつこつ勇者", "ギルドの柱", "千の伝説"],
+    milestones: [1, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400, 500, 750, 1000, 1500, 2000],
+    names: (target) => (target === 1 ? "最初の依頼" : `クエスト${target}回の記録`),
     description: "クエスト達成を積み重ねた証",
     conditionLabel: "クエスト達成 ",
     icon: "📜",
@@ -1931,8 +1961,8 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "daily",
-    milestones: [1, 3, 7, 14, 30, 60, 100, 200],
-    names: ["今日の任務完了", "三日の任務", "一週間の任務", "二週間の努力", "一ヶ月の守り手", "六十日の習慣", "百日の任務録", "二百日の誓い"],
+    milestones: [1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 100, 150, 200, 300],
+    names: (target) => (target === 1 ? "今日の任務完了" : `毎日クエスト${target}回`),
     description: "毎日クエストをやり遂げた証",
     conditionLabel: "毎日クエスト達成 ",
     icon: "🛡️",
@@ -1941,8 +1971,8 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "challenge",
-    milestones: [1, 5, 10, 30, 50, 100, 200],
-    names: ["追加依頼の一歩", "小さな助っ人", "挑戦十番", "頼れる助っ人", "追加依頼の名手", "百の挑戦", "挑戦の達人"],
+    milestones: [1, 3, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500],
+    names: (target) => (target === 1 ? "追加依頼の一歩" : `チャレンジ${target}回`),
     description: "チャレンジクエストへ挑戦した証",
     conditionLabel: "チャレンジ達成 ",
     icon: "⚔️",
@@ -1951,8 +1981,8 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "login-streak",
-    milestones: [3, 7, 14, 30, 60, 100, 200],
-    names: ["三日通い", "七日の帰還", "二週間の旅", "三十日の常連", "六十日の仲間", "百日の冒険者", "二百日の守護者"],
+    milestones: [2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 100, 150, 200],
+    names: (target) => `連続ログイン${target}日`,
     description: "アプリを続けて開いた証",
     conditionLabel: "連続ログイン ",
     icon: "🏰",
@@ -1961,8 +1991,8 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "reward",
-    milestones: [1, 3, 5, 10, 20, 30, 50],
-    names: ["はじめての交換", "楽しみ三つ", "ご褒美ハンター", "交換の達人", "願いの集め手", "楽しみ上手", "願いを叶える者"],
+    milestones: [1, 2, 3, 5, 7, 10, 15, 20, 30, 40, 50, 75, 100],
+    names: (target) => (target === 1 ? "はじめての交換" : `ご褒美交換${target}回`),
     description: "Goldをご褒美に交換した証",
     conditionLabel: "ご褒美交換 ",
     icon: "🎁",
@@ -1971,8 +2001,8 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "gold",
-    milestones: [100, 500, 1000, 3000, 5000, 10000],
-    names: ["金貨の袋", "小さな宝箱", "千の金貨", "金貨の旅商人", "黄金ギルドの仲間", "金貨王の貯蔵庫"],
+    milestones: [100, 300, 500, 1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 30000, 50000],
+    names: (target) => `Gold ${target}Gの記録`,
     description: "Goldを集めた証",
     conditionLabel: "累計Gold ",
     icon: "🪙",
@@ -1981,8 +2011,8 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "xp",
-    milestones: [100, 500, 1000, 3000, 5000, 10000],
-    names: ["はじめての経験", "小さな成長", "学びの光", "努力の結晶", "成長の証", "経験の旅人"],
+    milestones: [100, 300, 500, 1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 30000, 50000],
+    names: (target) => `XP ${target}の記録`,
     description: "経験値を積み重ねた証",
     conditionLabel: "累計XP ",
     icon: "✨",
@@ -1992,12 +2022,12 @@ const ACHIEVEMENTS = [
   ...["STR", "INT", "END", "DEX"].flatMap((stat) =>
     makeMilestoneAchievements({
       prefix: `stat-${stat.toLowerCase()}`,
-      milestones: [10, 30, 50, 100, 200],
+      milestones: [5, 10, 20, 30, 50, 75, 100, 150, 200, 300],
       names: {
-        STR: ["力の芽生え", "力自慢", "剛腕の冒険者", "力の守護者", "伝説の力"],
-        INT: ["賢さの芽生え", "ひらめき名人", "知恵の探検家", "賢者の書庫", "伝説の知恵"],
-        END: ["忍耐の芽生え", "あきらめない心", "粘り強き勇者", "継続の守護者", "伝説の忍耐"],
-        DEX: ["器用さの芽生え", "手先の名人", "技の冒険者", "工夫の職人", "伝説の技"],
+        STR: (target) => `力 ${target}`,
+        INT: (target) => `賢さ ${target}`,
+        END: (target) => `忍耐力 ${target}`,
+        DEX: (target) => `器用さ ${target}`,
       }[stat],
       description: `${getStatLabel(stat)}を伸ばした証`,
       conditionLabel: `${getStatLabel(stat)} `,
@@ -2008,8 +2038,8 @@ const ACHIEVEMENTS = [
   ),
   ...makeMilestoneAchievements({
     prefix: "weekly-report",
-    milestones: [1, 4, 8, 12, 24],
-    names: ["はじめての週報", "一ヶ月の記録", "八週の足あと", "三ヶ月の冒険録", "半年の記録者"],
+    milestones: [1, 2, 4, 8, 12, 16, 24, 36, 52],
+    names: (target) => (target === 1 ? "はじめての週報" : `週間レポート${target}週`),
     description: "週間レポートを積み上げた証",
     conditionLabel: "週間レポート ",
     icon: "📚",
@@ -2018,8 +2048,8 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "level",
-    milestones: [2, 5, 10, 20, 30, 50, 75, 100],
-    names: ["レベルアップの音", "ぐんぐん成長", "若き冒険者", "中堅ギルド員", "頼れる先輩", "熟練の冒険者", "英雄候補", "伝説の入口"],
+    milestones: [2, 5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 85, 100],
+    names: (target) => `Lv${target}到達`,
     description: "レベルが上がった証",
     conditionLabel: "Lv",
     icon: "⭐",
@@ -2028,14 +2058,146 @@ const ACHIEVEMENTS = [
   }),
   ...makeMilestoneAchievements({
     prefix: "login-total",
-    milestones: [1, 5, 10, 30, 60, 100, 200, 365],
-    names: ["はじめてのログイン", "いつもの顔", "常連見習い", "毎日の仲間", "季節の旅人", "百日の訪問者", "長旅の仲間", "年間冒険者"],
+    milestones: [1, 3, 5, 10, 20, 30, 60, 100, 150, 200, 365],
+    names: (target) => (target === 1 ? "はじめてのログイン" : `累計ログイン${target}日`),
     description: "アプリを開き続けた証",
     conditionLabel: "累計ログイン ",
     icon: "🚪",
     getCurrent: (ctx) => ctx.totalLoginDays,
     unit: "日",
   }),
+  ...makeMilestoneAchievements({
+    prefix: "morning",
+    milestones: [1, 5, 10, 30, 50, 100],
+    names: (target) => `朝の冒険 ${target}回`,
+    description: "朝の時間にクエストを達成した証",
+    conditionLabel: "朝のクエスト達成 ",
+    icon: "🌅",
+    getCurrent: (ctx) => ctx.morningQuestCount,
+    unit: "回",
+    category: "time",
+    conditionType: "morningQuestCount",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "night",
+    milestones: [1, 5, 10, 30, 50, 100],
+    names: (target) => `夜の努力 ${target}回`,
+    description: "夜にも落ち着いてクエストを達成した証",
+    conditionLabel: "夜のクエスト達成 ",
+    icon: "🌙",
+    getCurrent: (ctx) => ctx.nightQuestCount,
+    unit: "回",
+    category: "time",
+    conditionType: "nightQuestCount",
+  }),
+  ...makeMilestoneAchievements({
+    prefix: "weekend",
+    milestones: [1, 5, 10, 30, 50],
+    names: (target) => `週末の冒険 ${target}回`,
+    description: "週末にもクエストへ取り組んだ証",
+    conditionLabel: "週末クエスト達成 ",
+    icon: "🗓️",
+    getCurrent: (ctx) => ctx.weekendQuestCount,
+    unit: "回",
+    category: "weekday",
+    conditionType: "weekendQuestCount",
+  }),
+  ...["STR", "INT", "END", "DEX"].flatMap((stat) =>
+    makeMilestoneAchievements({
+      prefix: `type-${stat.toLowerCase()}`,
+      milestones: [5, 20, 50],
+      names: (target) => `${getCharacterTypeLabelByStat(stat)} Lv${target}`,
+      description: `${getCharacterTypeLabelByStat(stat)}として成長した証`,
+      conditionLabel: `${getCharacterTypeLabelByStat(stat)}でLv`,
+      icon: { STR: "🗡️", INT: "📘", END: "🛡️", DEX: "🛠️" }[stat],
+      getCurrent: (ctx) => (ctx.characterType === stat ? ctx.level : 0),
+      unit: "",
+      category: "character-type",
+      conditionType: `type-${stat}`,
+    }),
+  ),
+  ...makeMilestoneAchievements({
+    prefix: "balance",
+    milestones: [5, 10, 20, 30, 50, 75, 100],
+    names: (target) => `四つの力 ${target}`,
+    description: "4つの能力をバランスよく伸ばした証",
+    conditionLabel: "全ステータス ",
+    icon: "⚖️",
+    getCurrent: (ctx) => Math.min(...STAT_KEYS.map((stat) => Number(ctx.stats[stat] || 0))),
+    unit: "",
+    category: "stats",
+    conditionType: "balancedStats",
+  }),
+  makeAchievement(
+    "special-first-adventurer",
+    "はじめての冒険者",
+    "最初の一歩を踏み出した証",
+    "クエストを1回達成",
+    "🌟",
+    (ctx) => ctx.questTotal >= 1,
+    (ctx) => ({ current: ctx.questTotal, target: 1, unit: "回" }),
+    { category: "special", conditionType: "questTotal", targetValue: 1 },
+  ),
+  makeAchievement(
+    "special-effort-apprentice",
+    "努力の見習い",
+    "毎日の任務に向き合い始めた証",
+    "毎日クエストを7回達成",
+    "🎒",
+    (ctx) => ctx.dailyRequiredTotal >= 7,
+    (ctx) => ({ current: ctx.dailyRequiredTotal, target: 7, unit: "回" }),
+    { category: "special", conditionType: "dailyRequiredTotal", targetValue: 7 },
+  ),
+  makeAchievement(
+    "special-everyday-hero",
+    "毎日の勇者",
+    "続ける力が冒険の力になった証",
+    "連続達成7日",
+    "🔥",
+    (ctx) => ctx.questStreak >= 7,
+    (ctx) => ({ current: ctx.questStreak, target: 7, unit: "日" }),
+    { category: "special", conditionType: "questStreak", targetValue: 7 },
+  ),
+  makeAchievement(
+    "special-little-sage",
+    "小さな賢者",
+    "考える力を大きく伸ばした証",
+    "賢さ30到達",
+    "📖",
+    (ctx) => (ctx.stats.INT || 0) >= 30,
+    (ctx) => ({ current: ctx.stats.INT || 0, target: 30, unit: "" }),
+    { category: "special", conditionType: "stat-INT", targetValue: 30 },
+  ),
+  makeAchievement(
+    "special-continuation-guardian",
+    "継続の守護者",
+    "続ける力を大きく伸ばした証",
+    "忍耐力30到達",
+    "🛡️",
+    (ctx) => (ctx.stats.END || 0) >= 30,
+    (ctx) => ({ current: ctx.stats.END || 0, target: 30, unit: "" }),
+    { category: "special", conditionType: "stat-END", targetValue: 30 },
+  ),
+  makeAchievement(
+    "special-clever-crafter",
+    "工夫の技巧者",
+    "工夫する力を大きく伸ばした証",
+    "器用さ30到達",
+    "🛠️",
+    (ctx) => (ctx.stats.DEX || 0) >= 30,
+    (ctx) => ({ current: ctx.stats.DEX || 0, target: 30, unit: "" }),
+    { category: "special", conditionType: "stat-DEX", targetValue: 30 },
+  ),
+  makeAchievement(
+    "special-guild-star",
+    "ギルドの期待の星",
+    "たくさんの依頼をこなして成長した証",
+    "クエスト100回達成かつLv20到達",
+    "🏅",
+    (ctx) => ctx.questTotal >= 100 && ctx.level >= 20,
+    (ctx) => ({ current: Math.min(ctx.questTotal, 100), target: 100, unit: "回" }),
+    { category: "special", conditionType: "questAndLevel", targetValue: 100 },
+  ),
   ...[1, 2, 3, 4, 5, 6, 0].map((weekday) =>
     makeAchievement(
       `weekday-${weekday}`,
@@ -2083,6 +2245,16 @@ function getAchievementContext() {
     progress.totalChallengeCompletions || 0,
     progress.activityLog.filter((item) => normalizeQuestCategory(item.category) === "challenge").length,
   );
+  const morningQuestCount = progress.activityLog.filter((item) => Number(item.completedHour) < 12).length;
+  const nightQuestCount = progress.activityLog.filter((item) => Number(item.completedHour) >= 18).length;
+  const weekendQuestCount = progress.activityLog.filter((item) => {
+    const date = new Date(`${item.dateKey}T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+      return false;
+    }
+    const day = date.getDay();
+    return day === 0 || day === 6;
+  }).length;
   const recentQuestCount = (days) =>
     progress.activityLog.filter((item) => {
       const diff = getDayDifference(item.dateKey, getDateKey());
@@ -2101,8 +2273,12 @@ function getAchievementContext() {
     rewardExchangeCount: rewardHistory.length,
     level: getLevel(progress.xp),
     stats,
+    characterType: getMainStat(stats),
     weeklyReportCount: weeklyReportHistory.length,
     questWeekdays,
+    morningQuestCount,
+    nightQuestCount,
+    weekendQuestCount,
     todayCompleted: todayGrowth.completed,
     hasMorningQuest: progress.activityLog.some((item) => item.completedHour < 12),
     hasNightQuest: progress.activityLog.some((item) => item.completedHour >= 18),

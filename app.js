@@ -1929,6 +1929,41 @@ function getAchievementDisplayTitle(achievement) {
   return achievement.displayTitle || achievement.name || achievement.title;
 }
 
+function getAchievementLibraryCategory(achievement) {
+  const category = achievement.category || "";
+  const conditionType = achievement.conditionType || "";
+  const id = achievement.id || "";
+
+  if (["quest", "daily", "challenge", "weekday"].includes(category) || id.startsWith("weekday-")) {
+    return "adventure";
+  }
+  if (["login-streak", "login-total", "weekly-report", "time"].includes(category)) {
+    return "continuation";
+  }
+  if (["xp", "level"].includes(category)) {
+    return "growth";
+  }
+  if (category === "gold" || category === "reward") {
+    return "treasure";
+  }
+  if (category === "stats" || category === "character-type" || conditionType.startsWith("stat-") || conditionType.startsWith("type-")) {
+    return "learning";
+  }
+  if (category === "special") {
+    return "special";
+  }
+  return "special";
+}
+
+const ACHIEVEMENT_LIBRARY_CATEGORIES = [
+  { id: "adventure", name: "冒険の記録" },
+  { id: "continuation", name: "継続の記録" },
+  { id: "learning", name: "学びと能力の記録" },
+  { id: "growth", name: "成長の記録" },
+  { id: "treasure", name: "財宝の記録" },
+  { id: "special", name: "特別な記録" },
+];
+
 function getAchievementName(names, target, index, fallback) {
   if (typeof names === "function") {
     return names(target, index);
@@ -4926,22 +4961,44 @@ function renderAchievements() {
 
   const achievementContext = getAchievementContext();
   list.innerHTML = "";
-  ACHIEVEMENTS.forEach((achievement) => {
-    const unlocked = unlockedSet.has(achievement.id);
-    const progressText = getAchievementProgressText(achievement, achievementContext, unlocked);
-    const item = document.createElement("article");
-    item.className = `achievement-card${unlocked ? " is-unlocked" : ""}`;
-    item.innerHTML = `
-      <span class="achievement-icon" aria-hidden="true">${achievement.icon}</span>
-      <div>
-        <span class="achievement-status">${unlocked ? "✓ 達成済み" : "あと少し"}</span>
-        <h4>${escapeHtml(getAchievementDisplayTitle(achievement))}</h4>
-        <p>${escapeHtml(achievement.description)}</p>
-        <small>${escapeHtml(achievement.conditionText)}</small>
-        <small class="achievement-progress">${escapeHtml(progressText)}</small>
-      </div>
+  ACHIEVEMENT_LIBRARY_CATEGORIES.forEach((category, categoryIndex) => {
+    const achievements = ACHIEVEMENTS.filter((achievement) => getAchievementLibraryCategory(achievement) === category.id);
+    if (achievements.length === 0) {
+      return;
+    }
+
+    const unlockedInCategory = achievements.filter((achievement) => unlockedSet.has(achievement.id)).length;
+    const group = document.createElement("details");
+    group.className = "achievement-category";
+    group.open = categoryIndex === 0;
+    group.innerHTML = `
+      <summary>
+        <span>${escapeHtml(category.name)}</span>
+        <strong>${unlockedInCategory} / ${achievements.length}</strong>
+      </summary>
+      <div class="achievement-category-list"></div>
     `;
-    list.append(item);
+
+    const groupList = group.querySelector(".achievement-category-list");
+    achievements.forEach((achievement) => {
+      const unlocked = unlockedSet.has(achievement.id);
+      const progressText = getAchievementProgressText(achievement, achievementContext, unlocked);
+      const item = document.createElement("article");
+      item.className = `achievement-card${unlocked ? " is-unlocked" : ""}`;
+      item.innerHTML = `
+        <span class="achievement-icon" aria-hidden="true">${achievement.icon}</span>
+        <div>
+          <span class="achievement-status">${unlocked ? "獲得済み" : "未獲得"}</span>
+          <h4>${escapeHtml(getAchievementDisplayTitle(achievement))}</h4>
+          <p>${escapeHtml(achievement.description)}</p>
+          <small>${escapeHtml(achievement.conditionText)}</small>
+          <small class="achievement-progress">${escapeHtml(progressText)}</small>
+        </div>
+      `;
+      groupList.append(item);
+    });
+
+    list.append(group);
   });
 }
 
@@ -4953,6 +5010,8 @@ function renderCollectibleTitles() {
   const unlockedSet = new Set(unlockedIds);
 
   setText("[data-equipped-title-name]", equippedTitle ? equippedTitle.name : "称号未装備");
+  setText("[data-current-collectible-title]", equippedTitle ? equippedTitle.name : "称号未獲得");
+  setText("[data-current-collectible-title-desc]", equippedTitle ? equippedTitle.description : "称号を獲得すると、ここに表示されます。");
   if (count) {
     count.textContent = `${unlockedIds.length} / ${COLLECTIBLE_TITLES.length}`;
   }
@@ -4969,16 +5028,16 @@ function renderCollectibleTitles() {
     const item = document.createElement("article");
     item.className = `collectible-title-card${unlocked ? " is-unlocked" : ""}${equipped ? " is-equipped" : ""}`;
     item.innerHTML = `
-      <span class="collectible-title-icon" aria-hidden="true">${title.icon}</span>
-      <div>
-        <span class="collectible-title-status">${equipped ? "装備中" : unlocked ? "獲得済み" : "未獲得"}</span>
+        <span class="collectible-title-icon" aria-hidden="true">${title.icon}</span>
+        <div>
+        <span class="collectible-title-status">${equipped ? "現在の称号" : unlocked ? "獲得済み" : "未獲得"}</span>
         <h4>${escapeHtml(title.name)}</h4>
         <p>${escapeHtml(title.description)}</p>
         <small>${escapeHtml(title.conditionText)}</small>
         <small class="collectible-title-progress">${escapeHtml(progressText)}</small>
         ${
           unlocked
-            ? `<button class="collectible-title-equip" type="button" data-equip-title="${escapeHtml(title.id)}" ${equipped ? "disabled" : ""}>${equipped ? "装備中" : "装備する"}</button>`
+            ? `<button class="collectible-title-equip" type="button" data-equip-title="${escapeHtml(title.id)}" ${equipped ? "disabled" : ""}>${equipped ? "現在の称号" : "この称号にする"}</button>`
             : ""
         }
       </div>

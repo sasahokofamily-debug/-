@@ -4093,26 +4093,82 @@ h3 {
 
 .achievement-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.achievement-category {
+  border: 1px solid rgba(139, 101, 48, 0.36);
+  border-radius: 10px;
+  background: rgba(255, 247, 223, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 247, 223, 0.32);
+  overflow: hidden;
+}
+
+.achievement-category summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
+  color: var(--wood-dark);
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 950;
+  list-style: none;
+}
+
+.achievement-category summary::-webkit-details-marker {
+  display: none;
+}
+
+.achievement-category summary::before {
+  content: "▸";
+  flex: 0 0 auto;
+  color: var(--gold-dark);
+  transition: transform 180ms ease;
+}
+
+.achievement-category[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.achievement-category summary span {
+  flex: 1 1 auto;
+}
+
+.achievement-category summary strong {
+  flex: 0 0 auto;
+  border: 1px solid rgba(201, 154, 53, 0.32);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(241, 210, 122, 0.34);
+  font-size: 0.74rem;
+}
+
+.achievement-category-list {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
+  padding: 0 10px 12px;
 }
 
 .achievement-card {
   position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 9px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
   min-width: 0;
-  border: 1px solid rgba(111, 77, 59, 0.28);
-  border-radius: 8px;
-  padding: 10px;
+  border: 1px solid rgba(111, 77, 59, 0.32);
+  border-radius: 10px;
+  padding: 13px;
   background:
     repeating-linear-gradient(135deg, rgba(111, 63, 38, 0.03) 0 1px, transparent 1px 7px),
-    linear-gradient(180deg, rgba(196, 181, 158, 0.52), rgba(126, 110, 94, 0.34)),
-    rgba(255, 247, 223, 0.2);
+    linear-gradient(180deg, rgba(221, 207, 181, 0.72), rgba(174, 154, 125, 0.42)),
+    rgba(255, 247, 223, 0.34);
   box-shadow: inset 0 0 0 1px rgba(255, 247, 223, 0.18);
-  opacity: 0.68;
-  filter: saturate(0.68) contrast(0.96);
+  opacity: 0.82;
+  filter: saturate(0.82) contrast(0.98);
   overflow: hidden;
 }
 
@@ -4140,12 +4196,12 @@ h3 {
 .achievement-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
   color: var(--wood-dark);
   background: rgba(241, 210, 122, 0.34);
-  font-size: 1.12rem;
+  font-size: 1.08rem;
 }
 
 .achievement-card.is-unlocked .achievement-icon {
@@ -4157,13 +4213,13 @@ h3 {
   display: inline-flex;
   justify-content: center;
   max-width: 100%;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   border: 1px solid rgba(111, 77, 59, 0.16);
   border-radius: 999px;
   padding: 2px 7px;
-  color: rgba(84, 57, 42, 0.72);
-  background: rgba(255, 247, 223, 0.32);
-  font-size: 0.62rem;
+  color: rgba(84, 57, 42, 0.86);
+  background: rgba(255, 247, 223, 0.44);
+  font-size: 0.64rem;
   font-weight: 950;
   line-height: 1.3;
 }
@@ -4177,7 +4233,7 @@ h3 {
 .achievement-card h4 {
   margin: 0;
   color: var(--ink);
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   font-weight: 950;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -4185,7 +4241,7 @@ h3 {
 
 .achievement-card {
   align-items: center;
-  text-align: center;
+  text-align: left;
 }
 
 .achievement-card > * {
@@ -4195,13 +4251,13 @@ h3 {
 
 .achievement-card p,
 .achievement-card small {
-  text-align: center;
+  text-align: left;
 }
 
 .achievement-card p {
-  margin: 3px 0 0;
-  color: rgba(111, 77, 59, 0.82);
-  font-size: 0.72rem;
+  margin: 5px 0 0;
+  color: rgba(75, 51, 38, 0.88);
+  font-size: 0.73rem;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -4209,7 +4265,7 @@ h3 {
 .achievement-card small {
   display: block;
   margin-top: 5px;
-  color: rgba(48, 29, 20, 0.72);
+  color: rgba(48, 29, 20, 0.78);
   font-size: 0.68rem;
   font-weight: 900;
   line-height: 1.3;
@@ -4226,30 +4282,68 @@ h3 {
   background: rgba(241, 210, 122, 0.24);
 }
 
+.current-title-showcase {
+  margin: 12px 0 14px;
+  border: 1px solid rgba(201, 154, 53, 0.48);
+  border-radius: 12px;
+  padding: 15px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 237, 157, 0.32), transparent 7rem),
+    linear-gradient(180deg, rgba(255, 247, 223, 0.86), rgba(228, 200, 148, 0.62));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 247, 223, 0.38),
+    0 10px 20px rgba(48, 29, 20, 0.12);
+}
+
+.current-title-showcase span {
+  display: block;
+  color: rgba(111, 77, 59, 0.76);
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.current-title-showcase strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.current-title-showcase p {
+  margin: 7px 0 0;
+  color: rgba(75, 51, 38, 0.86);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .collectible-title-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
 .collectible-title-card {
   position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 9px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
   min-width: 0;
   border: 1px solid rgba(111, 77, 59, 0.28);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 13px;
   background:
     repeating-linear-gradient(135deg, rgba(111, 63, 38, 0.03) 0 1px, transparent 1px 7px),
-    linear-gradient(180deg, rgba(196, 181, 158, 0.5), rgba(126, 110, 94, 0.32)),
-    rgba(255, 247, 223, 0.2);
+    linear-gradient(180deg, rgba(221, 207, 181, 0.72), rgba(174, 154, 125, 0.42)),
+    rgba(255, 247, 223, 0.34);
   box-shadow: inset 0 0 0 1px rgba(255, 247, 223, 0.18);
-  opacity: 0.68;
-  filter: saturate(0.72) contrast(0.96);
+  opacity: 0.82;
+  filter: saturate(0.82) contrast(0.98);
   overflow: hidden;
-  text-align: center;
+  text-align: left;
 }
 
 .collectible-title-card.is-unlocked {
@@ -4276,8 +4370,8 @@ h3 {
 .collectible-title-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
   color: var(--wood-dark);
   background: rgba(241, 210, 122, 0.34);
@@ -4298,13 +4392,13 @@ h3 {
   display: inline-flex;
   justify-content: center;
   max-width: 100%;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   border: 1px solid rgba(111, 77, 59, 0.16);
   border-radius: 999px;
   padding: 2px 7px;
-  color: rgba(84, 57, 42, 0.72);
-  background: rgba(255, 247, 223, 0.32);
-  font-size: 0.62rem;
+  color: rgba(84, 57, 42, 0.86);
+  background: rgba(255, 247, 223, 0.44);
+  font-size: 0.64rem;
   font-weight: 950;
   line-height: 1.3;
 }
@@ -4318,7 +4412,7 @@ h3 {
 .collectible-title-card h4 {
   margin: 0;
   color: var(--ink);
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   font-weight: 950;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -4326,13 +4420,13 @@ h3 {
 
 .collectible-title-card p,
 .collectible-title-card small {
-  text-align: center;
+  text-align: left;
 }
 
 .collectible-title-card p {
-  margin: 3px 0 0;
-  color: rgba(111, 77, 59, 0.82);
-  font-size: 0.72rem;
+  margin: 5px 0 0;
+  color: rgba(75, 51, 38, 0.88);
+  font-size: 0.73rem;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -4340,7 +4434,7 @@ h3 {
 .collectible-title-card small {
   display: block;
   margin-top: 5px;
-  color: rgba(48, 29, 20, 0.72);
+  color: rgba(48, 29, 20, 0.78);
   font-size: 0.68rem;
   font-weight: 900;
   line-height: 1.3;
@@ -4359,8 +4453,8 @@ h3 {
 
 .collectible-title-equip {
   width: 100%;
-  min-height: 34px;
-  margin-top: 8px;
+  min-height: 38px;
+  margin-top: 10px;
   border: 1px solid rgba(112, 39, 35, 0.34);
   border-radius: 999px;
   color: #fff8e6;
@@ -5103,7 +5197,10 @@ h3 {
   .growth-chart-empty,
   .growth-chart-frame,
   .activity-log-item,
+  .achievement-category,
   .achievement-card,
+  .current-title-showcase,
+  .collectible-title-card,
   .future-form,
   .weekday-picker,
   .reward-shop-empty,
@@ -5161,7 +5258,10 @@ h3 {
   .growth-chart-empty,
   .growth-chart-frame,
   .activity-log-item,
+  .achievement-category,
   .achievement-card,
+  .current-title-showcase,
+  .collectible-title-card,
   .future-form,
   .weekday-picker,
   .reward-shop-empty,
@@ -5212,7 +5312,10 @@ h3 {
   .growth-chart-empty,
   .growth-chart-frame,
   .activity-log-item,
+  .achievement-category,
   .achievement-card,
+  .current-title-showcase,
+  .collectible-title-card,
   .future-form,
   .weekday-picker,
   .reward-shop-empty,
@@ -5248,6 +5351,11 @@ h3 {
   .quest-card {
     align-content: space-between;
     min-height: 260px;
+  }
+
+  .achievement-category-list,
+  .collectible-title-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

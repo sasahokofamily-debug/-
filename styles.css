@@ -625,6 +625,7 @@ h3 {
 }
 
 .sub-title-line,
+.equipped-title-line,
 .character-type-line,
 .character-evolution-line {
   margin: 8px 0 0;
@@ -654,6 +655,7 @@ h3 {
 }
 
 .sub-title-line strong,
+.equipped-title-line strong,
 .character-type-line strong,
 .character-evolution-line strong {
   color: var(--navy);
@@ -4224,6 +4226,154 @@ h3 {
   background: rgba(241, 210, 122, 0.24);
 }
 
+.collectible-title-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.collectible-title-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid rgba(111, 77, 59, 0.28);
+  border-radius: 8px;
+  padding: 10px;
+  background:
+    repeating-linear-gradient(135deg, rgba(111, 63, 38, 0.03) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, rgba(196, 181, 158, 0.5), rgba(126, 110, 94, 0.32)),
+    rgba(255, 247, 223, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 247, 223, 0.18);
+  opacity: 0.68;
+  filter: saturate(0.72) contrast(0.96);
+  overflow: hidden;
+  text-align: center;
+}
+
+.collectible-title-card.is-unlocked {
+  border-color: rgba(201, 154, 53, 0.58);
+  background:
+    repeating-linear-gradient(135deg, rgba(111, 63, 38, 0.025) 0 1px, transparent 1px 7px),
+    radial-gradient(circle at 16% 10%, rgba(241, 210, 122, 0.28), transparent 7rem),
+    linear-gradient(180deg, rgba(255, 247, 223, 0.84), rgba(228, 200, 148, 0.66));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 247, 223, 0.34),
+    0 10px 18px rgba(48, 29, 20, 0.12);
+  opacity: 1;
+  filter: none;
+}
+
+.collectible-title-card.is-equipped {
+  border-color: rgba(255, 210, 92, 0.82);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 247, 223, 0.4),
+    0 0 0 2px rgba(201, 154, 53, 0.18),
+    0 12px 22px rgba(48, 29, 20, 0.16);
+}
+
+.collectible-title-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: var(--wood-dark);
+  background: rgba(241, 210, 122, 0.34);
+  font-size: 1.08rem;
+}
+
+.collectible-title-card.is-unlocked .collectible-title-icon {
+  background: linear-gradient(180deg, rgba(255, 237, 157, 0.94), rgba(201, 154, 53, 0.54));
+  box-shadow: 0 0 14px rgba(241, 210, 122, 0.28);
+}
+
+.collectible-title-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.collectible-title-status {
+  display: inline-flex;
+  justify-content: center;
+  max-width: 100%;
+  margin-bottom: 5px;
+  border: 1px solid rgba(111, 77, 59, 0.16);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: rgba(84, 57, 42, 0.72);
+  background: rgba(255, 247, 223, 0.32);
+  font-size: 0.62rem;
+  font-weight: 950;
+  line-height: 1.3;
+}
+
+.collectible-title-card.is-unlocked .collectible-title-status {
+  color: var(--wood-dark);
+  border-color: rgba(201, 154, 53, 0.4);
+  background: rgba(241, 210, 122, 0.42);
+}
+
+.collectible-title-card h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 950;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.collectible-title-card p,
+.collectible-title-card small {
+  text-align: center;
+}
+
+.collectible-title-card p {
+  margin: 3px 0 0;
+  color: rgba(111, 77, 59, 0.82);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.collectible-title-card small {
+  display: block;
+  margin-top: 5px;
+  color: rgba(48, 29, 20, 0.72);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.collectible-title-progress {
+  display: inline-flex;
+  justify-content: center;
+  margin-top: 6px;
+  border: 1px solid rgba(201, 154, 53, 0.28);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--wood-dark);
+  background: rgba(241, 210, 122, 0.24);
+}
+
+.collectible-title-equip {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 8px;
+  border: 1px solid rgba(112, 39, 35, 0.34);
+  border-radius: 999px;
+  color: #fff8e6;
+  background: linear-gradient(180deg, #a9443d, #6f2724);
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.collectible-title-equip:disabled {
+  color: var(--wood-dark);
+  background: linear-gradient(180deg, rgba(241, 210, 122, 0.72), rgba(201, 154, 53, 0.5));
+}
+
 .admin-panel {
   padding: 16px;
 }
@@ -5175,7 +5325,8 @@ h3 {
     font-size: 2rem;
   }
 
-  .achievement-list {
+  .achievement-list,
+  .collectible-title-list {
     grid-template-columns: 1fr;
   }
 

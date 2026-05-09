@@ -92,6 +92,8 @@ const defaultProgress = {
   activityLog: [],
   recentStatHistory: [],
   titleHistory: [],
+  unlockedCollectibleTitleIds: [],
+  equippedCollectibleTitleId: "",
   lastLoginBonusDate: "",
   loginStreak: 0,
   totalLoginDays: 0,
@@ -417,6 +419,7 @@ function getDefaultProgressState() {
     activityLog: [],
     recentStatHistory: [],
     titleHistory: [],
+    unlockedCollectibleTitleIds: [],
     questCompletedWeekdays: [],
     visitedScreens: [],
   };
@@ -441,6 +444,8 @@ function loadProgress() {
       activityLog: Array.isArray(parsed.activityLog) ? parsed.activityLog.map(normalizeActivityLogItem).filter(Boolean) : [],
       recentStatHistory: normalizeRecentStatHistory(parsed.recentStatHistory, parsed.activityLog),
       titleHistory: Array.isArray(parsed.titleHistory) ? parsed.titleHistory.map(normalizeTitleHistoryItem).filter(Boolean) : [],
+      unlockedCollectibleTitleIds: normalizeStringList(parsed.unlockedCollectibleTitleIds),
+      equippedCollectibleTitleId: typeof parsed.equippedCollectibleTitleId === "string" ? parsed.equippedCollectibleTitleId : "",
       lastLoginBonusDate: typeof parsed.lastLoginBonusDate === "string" ? parsed.lastLoginBonusDate : "",
       loginStreak: Number.isFinite(parsed.loginStreak) ? Math.max(0, Math.round(parsed.loginStreak)) : 0,
       totalLoginDays: Number.isFinite(parsed.totalLoginDays)
@@ -1905,7 +1910,8 @@ function makeAchievement(id, name, description, conditionText, icon, isUnlocked,
     id,
     title: name,
     name,
-    description,
+    displayTitle: meta.displayTitle || name,
+    description: description.includes(conditionText) ? description : `${description}（${conditionText}）`,
     category: meta.category || id.split("-")[0] || "general",
     conditionType: meta.conditionType || id.split("-")[0] || "custom",
     targetValue: meta.targetValue ?? null,
@@ -1919,6 +1925,10 @@ function makeAchievement(id, name, description, conditionText, icon, isUnlocked,
   };
 }
 
+function getAchievementDisplayTitle(achievement) {
+  return achievement.displayTitle || achievement.name || achievement.title;
+}
+
 function getAchievementName(names, target, index, fallback) {
   if (typeof names === "function") {
     return names(target, index);
@@ -1929,11 +1939,168 @@ function getAchievementName(names, target, index, fallback) {
   return fallback;
 }
 
+function getAchievementDisplayName(prefix, target, fallbackName) {
+  const questNames = {
+    1: "はじめての冒険",
+    5: "冒険の第一歩",
+    10: "クエスト見習い",
+    20: "駆け出し依頼人",
+    30: "依頼に応える者",
+    50: "信頼される冒険者",
+    75: "ギルドの有望株",
+    100: "ギルドの新星",
+    150: "頼れる依頼請負人",
+    200: "熟練の冒険者",
+    300: "百戦錬磨の旅人",
+    400: "ギルドの柱",
+    500: "伝説への道",
+    750: "王都に響く名声",
+    1000: "ギルドの英雄",
+    1500: "大陸を渡る英雄",
+    2000: "伝説の依頼王",
+  };
+  const dailyNames = {
+    1: "今日の任務を終えた者",
+    2: "二日の努力",
+    3: "努力の見習い",
+    5: "習慣の芽",
+    7: "毎日の勇者",
+    10: "日課を守る者",
+    14: "毎日の探求者",
+    21: "三週間の誓い",
+    30: "継続の守護者",
+    45: "習慣の騎士",
+    60: "六十日の守り手",
+    90: "季節を越える者",
+    100: "不屈の冒険者",
+    150: "日々を刻む英雄",
+    200: "生活の賢者",
+    300: "毎日の伝説",
+  };
+  const challengeNames = {
+    1: "追加依頼の一歩",
+    3: "小さな助っ人",
+    5: "ギルドの助っ人",
+    10: "頼れる仲間",
+    20: "支え合う冒険者",
+    30: "依頼を広げる者",
+    50: "ギルドの支え手",
+    75: "頼もしき支援者",
+    100: "追加依頼の名手",
+    150: "縁の下の英雄",
+    200: "伝説のサポーター",
+    300: "王国の支援者",
+    500: "支えの大英雄",
+  };
+  const loginStreakNames = {
+    2: "また来た冒険者",
+    3: "続ける力",
+    5: "ギルドの常連",
+    7: "習慣の芽",
+    10: "十日の足あと",
+    14: "毎日の探求者",
+    21: "三週間の旅人",
+    30: "継続の守護者",
+    45: "続ける騎士",
+    60: "習慣の達人",
+    90: "季節を越える者",
+    100: "不屈の冒険者",
+    150: "日々の英雄",
+    200: "帰還の伝説",
+  };
+  const rewardNames = {
+    1: "はじめての宝箱",
+    2: "小さな楽しみ",
+    3: "願いを選ぶ者",
+    5: "ご褒美ハンター",
+    7: "楽しみの旅人",
+    10: "交換の達人",
+    15: "宝箱の常連",
+    20: "願いの集め手",
+    30: "楽しみ上手",
+    40: "夢を叶える者",
+    50: "願いを叶える者",
+    75: "宝物庫の番人",
+    100: "ご褒美の英雄",
+  };
+  const goldNames = {
+    100: "初めての財宝",
+    300: "小さな金貨袋",
+    500: "金貨集めの達人",
+    1000: "宝物の番人",
+    2000: "金庫の守り手",
+    3000: "黄金の旅商人",
+    5000: "王国の富豪",
+    7500: "金貨の賢者",
+    10000: "黄金ギルドの主",
+    15000: "宝物庫の支配者",
+    20000: "黄金王への道",
+    30000: "金貨王",
+    50000: "伝説の大富豪",
+  };
+  const xpNames = {
+    100: "はじめての経験",
+    300: "成長の芽",
+    500: "小さな成長",
+    1000: "学びの光",
+    2000: "努力の結晶",
+    3000: "知恵の旅人",
+    5000: "成長の証",
+    7500: "経験を積む者",
+    10000: "経験の旅人",
+    15000: "学びの騎士",
+    20000: "経験の賢者",
+    30000: "知恵の冒険者",
+    50000: "伝説の経験者",
+  };
+  const levelNames = {
+    2: "レベルアップの音",
+    5: "若き冒険者",
+    10: "一人前の冒険者",
+    15: "旅立ちの騎士",
+    20: "熟練の旅人",
+    25: "頼れる先輩",
+    30: "中堅ギルド員",
+    40: "名高き冒険者",
+    50: "英雄候補",
+    60: "熟練の英雄",
+    75: "伝説の入口",
+    85: "伝説級冒険者",
+    100: "伝説の勇者",
+  };
+  const loginTotalNames = {
+    1: "ギルド初訪問",
+    3: "三度目の帰還",
+    5: "いつもの顔",
+    10: "常連冒険者",
+    20: "ギルドの仲間",
+    30: "ギルドの住人",
+    60: "季節の旅人",
+    100: "百日の記録者",
+    150: "長旅の仲間",
+    200: "大陸の常連",
+    365: "年間冒険者",
+  };
+  const maps = {
+    quest: questNames,
+    daily: dailyNames,
+    challenge: challengeNames,
+    "login-streak": loginStreakNames,
+    reward: rewardNames,
+    gold: goldNames,
+    xp: xpNames,
+    level: levelNames,
+    "login-total": loginTotalNames,
+  };
+  return maps[prefix]?.[target] || fallbackName;
+}
+
 function makeMilestoneAchievements({ prefix, milestones, names, description, conditionLabel, icon, getCurrent, unit, category, conditionType }) {
-  return milestones.map((target, index) =>
-    makeAchievement(
+  return milestones.map((target, index) => {
+    const name = getAchievementName(names, target, index, `${conditionLabel}${target}${unit}`);
+    return makeAchievement(
       `${prefix}-${target}`,
-      getAchievementName(names, target, index, `${conditionLabel}${target}${unit}`),
+      name,
       description,
       `${conditionLabel}${target}${unit}`,
       icon,
@@ -1943,9 +2110,22 @@ function makeMilestoneAchievements({ prefix, milestones, names, description, con
         category: category || prefix,
         conditionType: conditionType || prefix,
         targetValue: target,
+        displayTitle: getAchievementDisplayName(prefix, target, name),
       },
-    ),
-  );
+    );
+  });
+}
+
+function makeCollectibleTitle(id, name, description, conditionText, icon, isUnlocked, getProgress = null) {
+  return {
+    id,
+    name,
+    description,
+    conditionText,
+    icon,
+    isUnlocked,
+    getProgress,
+  };
 }
 
 const ACHIEVEMENTS = [
@@ -2220,6 +2400,35 @@ const ACHIEVEMENTS = [
   ),
 ];
 
+const COLLECTIBLE_TITLES = [
+  makeCollectibleTitle(
+    "first-adventurer",
+    "はじめての冒険者",
+    "最初のクエストを達成した証。",
+    "クエストを1回達成",
+    "🌟",
+    (ctx) => ctx.questTotal >= 1 || ctx.unlockedAchievementIds.includes("special-first-adventurer"),
+    (ctx) => ({ current: ctx.questTotal, target: 1, unit: "回" }),
+  ),
+  makeCollectibleTitle("effort-apprentice", "努力の見習い", "毎日の任務に向き合い始めた証。", "毎日クエスト7回達成", "🎒", (ctx) => ctx.dailyRequiredTotal >= 7, (ctx) => ({ current: ctx.dailyRequiredTotal, target: 7, unit: "回" })),
+  makeCollectibleTitle("daily-hero", "毎日の勇者", "続ける力が冒険の力になった証。", "連続達成7日", "🔥", (ctx) => ctx.questStreak >= 7, (ctx) => ({ current: ctx.questStreak, target: 7, unit: "日" })),
+  makeCollectibleTitle("homework-master", "宿題マスター", "やるべきことを積み重ねた証。", "毎日クエスト30回達成", "📚", (ctx) => ctx.dailyRequiredTotal >= 30, (ctx) => ({ current: ctx.dailyRequiredTotal, target: 30, unit: "回" })),
+  makeCollectibleTitle("continuation-guardian", "継続の守護者", "続ける力を大きく伸ばした証。", "忍耐力30到達", "🛡️", (ctx) => (ctx.stats.END || 0) >= 30, (ctx) => ({ current: ctx.stats.END || 0, target: 30, unit: "" })),
+  makeCollectibleTitle("wisdom-seeker", "知恵の探求者", "考える力を磨き続けた証。", "賢さ30到達", "📘", (ctx) => (ctx.stats.INT || 0) >= 30, (ctx) => ({ current: ctx.stats.INT || 0, target: 30, unit: "" })),
+  makeCollectibleTitle("craft-trickster", "工夫の技巧者", "工夫する力を伸ばした証。", "器用さ30到達", "🛠️", (ctx) => (ctx.stats.DEX || 0) >= 30, (ctx) => ({ current: ctx.stats.DEX || 0, target: 30, unit: "" })),
+  makeCollectibleTitle("brave-runner", "行動の勇者", "体を動かし、前へ進んだ証。", "力30到達", "🗡️", (ctx) => (ctx.stats.STR || 0) >= 30, (ctx) => ({ current: ctx.stats.STR || 0, target: 30, unit: "" })),
+  makeCollectibleTitle("guild-star", "ギルドの期待の星", "依頼と成長を重ねた期待の星。", "クエスト100回かつLv20到達", "🏅", (ctx) => ctx.questTotal >= 100 && ctx.level >= 20, (ctx) => ({ current: Math.min(ctx.questTotal, 100), target: 100, unit: "回" })),
+  makeCollectibleTitle("gold-keeper", "金貨の管理人", "Goldをこつこつ集めた証。", "累計Gold1000G", "🪙", (ctx) => ctx.totalGoldEarned >= 1000, (ctx) => ({ current: ctx.totalGoldEarned, target: 1000, unit: "G" })),
+  makeCollectibleTitle("reward-hunter", "ご褒美ハンター", "楽しみを自分の力で手にした証。", "ご褒美交換5回", "🎁", (ctx) => ctx.rewardExchangeCount >= 5, (ctx) => ({ current: ctx.rewardExchangeCount, target: 5, unit: "回" })),
+  makeCollectibleTitle("young-adventurer", "若き冒険者", "冒険者として大きく育った証。", "Lv10到達", "⭐", (ctx) => ctx.level >= 10, (ctx) => ({ current: ctx.level, target: 10, unit: "Lv" })),
+  makeCollectibleTitle("veteran-adventurer", "熟練冒険者", "多くの経験を重ねた証。", "Lv50到達", "🏆", (ctx) => ctx.level >= 50, (ctx) => ({ current: ctx.level, target: 50, unit: "Lv" })),
+  makeCollectibleTitle("legend-adventurer", "伝説級冒険者", "長い冒険を続けた証。", "Lv100到達", "👑", (ctx) => ctx.level >= 100, (ctx) => ({ current: ctx.level, target: 100, unit: "Lv" })),
+  makeCollectibleTitle("morning-adventurer", "朝の冒険者", "朝から動き出せた証。", "朝のクエスト10回", "🌅", (ctx) => ctx.morningQuestCount >= 10, (ctx) => ({ current: ctx.morningQuestCount, target: 10, unit: "回" })),
+  makeCollectibleTitle("night-effort", "夜の努力家", "夜にも落ち着いて進めた証。", "夜のクエスト10回", "🌙", (ctx) => ctx.nightQuestCount >= 10, (ctx) => ({ current: ctx.nightQuestCount, target: 10, unit: "回" })),
+  makeCollectibleTitle("balanced-adventurer", "バランス冒険者", "4つの力をバランスよく伸ばした証。", "全ステータス20到達", "⚖️", (ctx) => Math.min(...STAT_KEYS.map((stat) => Number(ctx.stats[stat] || 0))) >= 20, (ctx) => ({ current: Math.min(...STAT_KEYS.map((stat) => Number(ctx.stats[stat] || 0))), target: 20, unit: "" })),
+  makeCollectibleTitle("challenge-specialist", "追加依頼の達人", "できたら挑戦を積み重ねた証。", "チャレンジ50回達成", "⚔️", (ctx) => ctx.challengeTotal >= 50, (ctx) => ({ current: ctx.challengeTotal, target: 50, unit: "回" })),
+];
+
 const activeAchievementIds = new Set(ACHIEVEMENTS.map((achievement) => achievement.id));
 const reconciledAchievements = unlockedAchievements.filter((id) => activeAchievementIds.has(id));
 if (reconciledAchievements.length !== unlockedAchievements.length) {
@@ -2284,6 +2493,7 @@ function getAchievementContext() {
     hasNightQuest: progress.activityLog.some((item) => item.completedHour >= 18),
     visitedScreens: normalizeStringList(progress.visitedScreens),
     recentQuestCount,
+    unlockedAchievementIds: [...unlockedAchievements],
   };
 }
 
@@ -2307,6 +2517,7 @@ function checkAchievements({ showToast = true } = {}) {
   const context = getAchievementContext();
   const newlyUnlocked = ACHIEVEMENTS.filter((achievement) => !unlockedAchievements.includes(achievement.id) && achievement.isUnlocked(context));
   if (newlyUnlocked.length === 0) {
+    checkCollectibleTitles({ showToast });
     return [];
   }
 
@@ -2317,6 +2528,7 @@ function checkAchievements({ showToast = true } = {}) {
   if (showToast) {
     showAchievementToast(newlyUnlocked);
   }
+  checkCollectibleTitles({ showToast });
   return newlyUnlocked;
 }
 
@@ -2328,13 +2540,92 @@ function showAchievementToast(achievements) {
 
   const message =
     achievements.length === 1
-      ? `実績解除！ ${achievements[0].name}`
+      ? `実績解除！ ${getAchievementDisplayTitle(achievements[0])}`
       : `実績解除！ ${achievements.length}件の実績を達成`;
   window.setTimeout(() => playSound("achievement"), ACHIEVEMENT_SOUND_DELAY);
   enqueueToast(toast, {
     message,
     timerName: "achievement",
   });
+}
+
+function getCollectibleTitleProgressText(title, context, unlocked) {
+  if (unlocked) {
+    return "獲得済み";
+  }
+  if (typeof title.getProgress !== "function") {
+    return title.conditionText;
+  }
+
+  const progressInfo = title.getProgress(context);
+  const current = Math.max(0, Math.floor(Number(progressInfo.current) || 0));
+  const target = Math.max(1, Math.floor(Number(progressInfo.target) || 1));
+  const remaining = Math.max(0, target - current);
+  const unit = progressInfo.unit || "";
+  return remaining === 0 ? "まもなく獲得" : `あと${remaining}${unit}で獲得`;
+}
+
+function getEquippedCollectibleTitle() {
+  const unlockedIds = normalizeStringList(progress.unlockedCollectibleTitleIds);
+  const equippedId = unlockedIds.includes(progress.equippedCollectibleTitleId) ? progress.equippedCollectibleTitleId : unlockedIds[0];
+  return COLLECTIBLE_TITLES.find((title) => title.id === equippedId) || null;
+}
+
+function checkCollectibleTitles({ showToast = true } = {}) {
+  const context = getAchievementContext();
+  const currentIds = normalizeStringList(progress.unlockedCollectibleTitleIds);
+  const newlyUnlocked = COLLECTIBLE_TITLES.filter((title) => !currentIds.includes(title.id) && title.isUnlocked(context));
+
+  if (newlyUnlocked.length === 0) {
+    return [];
+  }
+
+  progress = {
+    ...progress,
+    unlockedCollectibleTitleIds: [...currentIds, ...newlyUnlocked.map((title) => title.id)],
+    equippedCollectibleTitleId: progress.equippedCollectibleTitleId || newlyUnlocked[0].id,
+  };
+  saveProgress();
+  renderCollectibleTitles();
+
+  if (showToast) {
+    showCollectibleTitleToast(newlyUnlocked);
+  }
+
+  return newlyUnlocked;
+}
+
+function showCollectibleTitleToast(titles) {
+  const toast = document.querySelector("[data-achievement-toast]");
+  if (!toast || titles.length === 0) {
+    return;
+  }
+
+  const message =
+    titles.length === 1
+      ? `称号獲得！ ${titles[0].name}`
+      : `称号獲得！ ${titles.length}件の称号を獲得`;
+  window.setTimeout(() => playSound("achievement"), ACHIEVEMENT_SOUND_DELAY);
+  enqueueToast(toast, {
+    message,
+    timerName: "achievement",
+  });
+}
+
+function equipCollectibleTitle(titleId) {
+  const unlockedIds = normalizeStringList(progress.unlockedCollectibleTitleIds);
+  if (!unlockedIds.includes(titleId)) {
+    return;
+  }
+
+  progress = {
+    ...progress,
+    equippedCollectibleTitleId: titleId,
+  };
+  saveProgress();
+  renderCollectibleTitles();
+  const equippedTitle = getEquippedCollectibleTitle();
+  setText("[data-equipped-title-name]", equippedTitle ? equippedTitle.name : "称号未装備");
 }
 
 function markScreenVisited(screenId) {
@@ -2844,6 +3135,12 @@ function applyResetTarget(target) {
 
   if (target === "achievements") {
     unlockedAchievements = [];
+    progress = {
+      ...progress,
+      unlockedCollectibleTitleIds: [],
+      equippedCollectibleTitleId: "",
+    };
+    saveProgress();
     saveAchievements();
     return;
   }
@@ -4638,10 +4935,52 @@ function renderAchievements() {
       <span class="achievement-icon" aria-hidden="true">${achievement.icon}</span>
       <div>
         <span class="achievement-status">${unlocked ? "✓ 達成済み" : "あと少し"}</span>
-        <h4>${escapeHtml(achievement.name)}</h4>
+        <h4>${escapeHtml(getAchievementDisplayTitle(achievement))}</h4>
         <p>${escapeHtml(achievement.description)}</p>
         <small>${escapeHtml(achievement.conditionText)}</small>
         <small class="achievement-progress">${escapeHtml(progressText)}</small>
+      </div>
+    `;
+    list.append(item);
+  });
+}
+
+function renderCollectibleTitles() {
+  const list = document.querySelector("[data-collectible-title-list]");
+  const count = document.querySelector("[data-collectible-title-count]");
+  const equippedTitle = getEquippedCollectibleTitle();
+  const unlockedIds = normalizeStringList(progress.unlockedCollectibleTitleIds);
+  const unlockedSet = new Set(unlockedIds);
+
+  setText("[data-equipped-title-name]", equippedTitle ? equippedTitle.name : "称号未装備");
+  if (count) {
+    count.textContent = `${unlockedIds.length} / ${COLLECTIBLE_TITLES.length}`;
+  }
+  if (!list) {
+    return;
+  }
+
+  const context = getAchievementContext();
+  list.innerHTML = "";
+  COLLECTIBLE_TITLES.forEach((title) => {
+    const unlocked = unlockedSet.has(title.id);
+    const equipped = equippedTitle?.id === title.id;
+    const progressText = getCollectibleTitleProgressText(title, context, unlocked);
+    const item = document.createElement("article");
+    item.className = `collectible-title-card${unlocked ? " is-unlocked" : ""}${equipped ? " is-equipped" : ""}`;
+    item.innerHTML = `
+      <span class="collectible-title-icon" aria-hidden="true">${title.icon}</span>
+      <div>
+        <span class="collectible-title-status">${equipped ? "装備中" : unlocked ? "獲得済み" : "未獲得"}</span>
+        <h4>${escapeHtml(title.name)}</h4>
+        <p>${escapeHtml(title.description)}</p>
+        <small>${escapeHtml(title.conditionText)}</small>
+        <small class="collectible-title-progress">${escapeHtml(progressText)}</small>
+        ${
+          unlocked
+            ? `<button class="collectible-title-equip" type="button" data-equip-title="${escapeHtml(title.id)}" ${equipped ? "disabled" : ""}>${equipped ? "装備中" : "装備する"}</button>`
+            : ""
+        }
       </div>
     `;
     list.append(item);
@@ -4676,7 +5015,7 @@ function renderRecentAchievements() {
     item.innerHTML = `
       <span class="recent-achievement-icon" aria-hidden="true">${achievement.icon}</span>
       <div>
-        <h4>${escapeHtml(achievement.name)}</h4>
+        <h4>${escapeHtml(getAchievementDisplayTitle(achievement))}</h4>
         <p>${escapeHtml(achievement.description)}</p>
       </div>
       <strong>解除済み</strong>
@@ -4733,6 +5072,7 @@ function render() {
 
   renderGrowthRecord(level, title);
   renderAchievements();
+  renderCollectibleTitles();
   renderRecentAchievements();
   renderXpBar();
   renderCharacter(level);
@@ -4929,6 +5269,12 @@ document.addEventListener("click", (event) => {
   if (growthChartModeButton) {
     growthChartMode = growthChartModeButton.dataset.growthChartMode || "xp";
     renderGrowthChart();
+    return;
+  }
+
+  const equipTitleButton = event.target.closest("[data-equip-title]");
+  if (equipTitleButton) {
+    equipCollectibleTitle(equipTitleButton.dataset.equipTitle);
     return;
   }
 

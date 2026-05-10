@@ -377,6 +377,7 @@ h3 {
   display: grid;
   grid-template-columns: 124px minmax(0, 1fr);
   align-items: center;
+  justify-content: center;
   gap: 15px;
   padding: 17px;
   background-image:
@@ -588,6 +589,9 @@ h3 {
 
 .adventurer-copy {
   position: relative;
+  justify-self: center;
+  width: 100%;
+  max-width: 560px;
   min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
@@ -644,6 +648,8 @@ h3 {
 }
 
 .character-type-desc {
+  width: 100%;
+  max-width: 560px;
   margin: 7px 0 2px;
   padding: 8px 10px;
   border: 1px solid rgba(185, 137, 54, 0.26);
@@ -5339,7 +5345,7 @@ h3 {
   }
 
   .hero-panel {
-    grid-template-columns: 156px minmax(0, 1fr);
+    grid-template-columns: 156px minmax(0, 560px);
     padding: 20px;
   }
 

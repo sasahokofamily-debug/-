@@ -1929,6 +1929,29 @@ function getAchievementDisplayTitle(achievement) {
   return achievement.displayTitle || achievement.name || achievement.title;
 }
 
+function getAchievementConditionText(achievement) {
+  return achievement.conditionText || achievement.requirementText || achievement.condition || "";
+}
+
+function getAchievementDescriptionText(achievement) {
+  const conditionText = getAchievementConditionText(achievement);
+  let description = String(achievement.description || "").trim();
+  if (conditionText) {
+    description = description
+      .replace(`（${conditionText}）`, "")
+      .replace(`(${conditionText})`, "");
+  }
+
+  description = description
+    .replace(/[（(][^）)]*(?:回|日|XP|G|Lv|レベル|達成|到達|ログイン|交換|週間|週|曜日|朝|夜)[^）)]*[）)]/g, "")
+    .trim();
+
+  if (description && !/[。.!！?？]$/.test(description)) {
+    return `${description}。`;
+  }
+  return description;
+}
+
 function getAchievementLibraryCategory(achievement) {
   const category = achievement.category || "";
   const conditionType = achievement.conditionType || "";
@@ -4983,6 +5006,9 @@ function renderAchievements() {
     achievements.forEach((achievement) => {
       const unlocked = unlockedSet.has(achievement.id);
       const progressText = getAchievementProgressText(achievement, achievementContext, unlocked);
+      const conditionText = getAchievementConditionText(achievement);
+      const descriptionText = getAchievementDescriptionText(achievement);
+      const shouldShowProgress = progressText && progressText !== conditionText;
       const item = document.createElement("article");
       item.className = `achievement-card${unlocked ? " is-unlocked" : ""}`;
       item.innerHTML = `
@@ -4990,9 +5016,9 @@ function renderAchievements() {
         <div>
           <span class="achievement-status">${unlocked ? "獲得済み" : "未獲得"}</span>
           <h4>${escapeHtml(getAchievementDisplayTitle(achievement))}</h4>
-          <p>${escapeHtml(achievement.description)}</p>
-          <small>${escapeHtml(achievement.conditionText)}</small>
-          <small class="achievement-progress">${escapeHtml(progressText)}</small>
+          <p>${escapeHtml(descriptionText)}</p>
+          <small>条件：${escapeHtml(conditionText)}</small>
+          ${shouldShowProgress ? `<small class="achievement-progress">${escapeHtml(progressText)}</small>` : ""}
         </div>
       `;
       groupList.append(item);
@@ -5075,7 +5101,7 @@ function renderRecentAchievements() {
       <span class="recent-achievement-icon" aria-hidden="true">${achievement.icon}</span>
       <div>
         <h4>${escapeHtml(getAchievementDisplayTitle(achievement))}</h4>
-        <p>${escapeHtml(achievement.description)}</p>
+        <p>${escapeHtml(getAchievementDescriptionText(achievement))}</p>
       </div>
       <strong>解除済み</strong>
     `;

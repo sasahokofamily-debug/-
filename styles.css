@@ -271,6 +271,26 @@ h3 {
   display: block;
 }
 
+#quests {
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+#quests .section-heading {
+  margin-right: auto;
+  margin-left: auto;
+  text-align: center;
+}
+
+#quests .quest-category-tabs,
+#quests .quest-category-progress,
+#quests .quest-list {
+  width: 100%;
+  max-width: 720px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
 .panel,
 .stat-card,
 .quest-card,
@@ -2250,6 +2270,7 @@ h3 {
 
 .quest-list {
   display: grid;
+  justify-items: center;
   gap: 13px;
 }
 
@@ -2508,6 +2529,8 @@ h3 {
   --surface-bg-image: var(--asset-quest-card-background), var(--asset-card-background);
   position: relative;
   display: grid;
+  width: 100%;
+  max-width: 100%;
   gap: 12px;
   padding: 16px 14px;
   border-color: rgba(176, 126, 43, 0.36);
@@ -5373,6 +5396,10 @@ h3 {
     padding-top: calc(18px + env(safe-area-inset-top));
     padding-right: 10px;
     padding-left: 10px;
+  }
+
+  #quests {
+    width: calc(100% - 4px);
   }
 
   .hero-panel {

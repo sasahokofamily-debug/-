@@ -7,6 +7,7 @@ const ACHIEVEMENTS_KEY = "guildAchievements";
 const WEEKLY_REPORT_HISTORY_KEY = "sora_guild_app_weekly_report_history_dev";
 const PARENT_NOTES_KEY = "sora_guild_app_parent_notes_dev";
 const ONBOARDING_KEY = "hasSeenOnboarding";
+const LOGIN_BONUS_SETTINGS_KEY = "sora_guild_app_login_bonus_settings_dev";
 const BGM_ENABLED_KEY = "sora_guild_app_bgm_enabled_dev";
 const BGM_SRC = "./assets/audio/bgm/bgm_main.mp3";
 const BGM_VOLUME = 0.3;
@@ -21,8 +22,15 @@ const WEEKLY_REPORT_SENT_WEEK_KEY = "sora_guild_app_last_weekly_report_sent_week
 const BACKUP_RESTORE_MESSAGE_KEY = "sora_guild_app_backup_restore_message";
 const isTestMode = false;
 const PARENT_PIN = "0718";
-const LOGIN_BONUS_GOLD = 10;
-const LOGIN_STREAK_BONUS_GOLD = 50;
+const DEFAULT_LOGIN_BONUS_SETTINGS = {
+  dailyEnabled: true,
+  dailyXp: 5,
+  dailyGold: 5,
+  streakEnabled: true,
+  streakIntervalDays: 7,
+  streakXp: 20,
+  streakGold: 20,
+};
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 const STAT_KEYS = ["STR", "INT", "END", "DEX"];
 const RECENT_STAT_HISTORY_LIMIT = 10;
@@ -67,6 +75,7 @@ const BACKUP_STORAGE_KEYS = [
   WEEKLY_REPORT_SENT_WEEK_KEY,
   PARENT_NOTES_KEY,
   ONBOARDING_KEY,
+  LOGIN_BONUS_SETTINGS_KEY,
   BGM_ENABLED_KEY,
   SFX_ENABLED_KEY,
   CHARACTER_STAGE_KEY,
@@ -360,6 +369,7 @@ let rewards = loadRewards();
 let rewardHistory = loadRewardHistory();
 let unlockedAchievements = loadAchievements();
 let weeklyReportHistory = loadWeeklyReportHistory();
+let loginBonusSettings = loadLoginBonusSettings();
 progress = reconcileProgressFromHistory(progress);
 let rewardToastTimer;
 let clearToastTimer;
@@ -532,6 +542,40 @@ function removeRecentStatHistoryItem(history, stat) {
 
 function saveProgress() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+}
+
+function normalizeNonNegativeNumber(value, fallback = 0) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? Math.max(0, Math.round(numberValue)) : fallback;
+}
+
+function normalizeLoginBonusSettings(rawSettings = {}) {
+  return {
+    ...DEFAULT_LOGIN_BONUS_SETTINGS,
+    dailyEnabled: typeof rawSettings.dailyEnabled === "boolean" ? rawSettings.dailyEnabled : DEFAULT_LOGIN_BONUS_SETTINGS.dailyEnabled,
+    dailyXp: normalizeNonNegativeNumber(rawSettings.dailyXp, DEFAULT_LOGIN_BONUS_SETTINGS.dailyXp),
+    dailyGold: normalizeNonNegativeNumber(rawSettings.dailyGold, DEFAULT_LOGIN_BONUS_SETTINGS.dailyGold),
+    streakEnabled: typeof rawSettings.streakEnabled === "boolean" ? rawSettings.streakEnabled : DEFAULT_LOGIN_BONUS_SETTINGS.streakEnabled,
+    streakIntervalDays: Math.max(
+      1,
+      normalizeNonNegativeNumber(rawSettings.streakIntervalDays, DEFAULT_LOGIN_BONUS_SETTINGS.streakIntervalDays),
+    ),
+    streakXp: normalizeNonNegativeNumber(rawSettings.streakXp, DEFAULT_LOGIN_BONUS_SETTINGS.streakXp),
+    streakGold: normalizeNonNegativeNumber(rawSettings.streakGold, DEFAULT_LOGIN_BONUS_SETTINGS.streakGold),
+  };
+}
+
+function loadLoginBonusSettings() {
+  try {
+    const stored = localStorage.getItem(LOGIN_BONUS_SETTINGS_KEY);
+    return normalizeLoginBonusSettings(stored ? JSON.parse(stored) : {});
+  } catch {
+    return normalizeLoginBonusSettings();
+  }
+}
+
+function saveLoginBonusSettings() {
+  localStorage.setItem(LOGIN_BONUS_SETTINGS_KEY, JSON.stringify(loginBonusSettings));
 }
 
 function loadAchievements() {
@@ -823,25 +867,43 @@ function applyLoginBonus() {
     return {
       granted: false,
       streakBonus: false,
+      dailyXp: 0,
+      dailyGold: 0,
+      streakXp: 0,
+      streakGold: 0,
+      streakIntervalDays: loginBonusSettings.streakIntervalDays,
     };
   }
 
+  const settings = normalizeLoginBonusSettings(loginBonusSettings);
   const dayDifference = progress.lastLoginBonusDate ? getDayDifference(progress.lastLoginBonusDate, today) : Number.POSITIVE_INFINITY;
   const nextLoginStreak = dayDifference === 1 ? Math.max(0, progress.loginStreak) + 1 : 1;
-  const streakBonus = nextLoginStreak === 7;
+  const streakBonus = settings.streakEnabled && nextLoginStreak % settings.streakIntervalDays === 0;
+  const dailyXp = settings.dailyEnabled ? settings.dailyXp : 0;
+  const dailyGold = settings.dailyEnabled ? settings.dailyGold : 0;
+  const streakXp = streakBonus ? settings.streakXp : 0;
+  const streakGold = streakBonus ? settings.streakGold : 0;
+  const totalXpGain = dailyXp + streakXp;
+  const totalGoldGain = dailyGold + streakGold;
 
   progress = {
     ...progress,
-    gold: progress.gold + LOGIN_BONUS_GOLD + (streakBonus ? LOGIN_STREAK_BONUS_GOLD : 0),
+    xp: progress.xp + totalXpGain,
+    gold: progress.gold + totalGoldGain,
     loginStreak: nextLoginStreak,
     totalLoginDays: Math.max(0, progress.totalLoginDays || 0) + 1,
-    totalGoldEarned: Math.max(0, progress.totalGoldEarned || progress.gold || 0) + LOGIN_BONUS_GOLD + (streakBonus ? LOGIN_STREAK_BONUS_GOLD : 0),
+    totalGoldEarned: Math.max(0, progress.totalGoldEarned || progress.gold || 0) + totalGoldGain,
     lastLoginBonusDate: today,
   };
   saveProgress();
   return {
-    granted: true,
+    granted: totalXpGain > 0 || totalGoldGain > 0,
     streakBonus,
+    dailyXp,
+    dailyGold,
+    streakXp,
+    streakGold,
+    streakIntervalDays: settings.streakIntervalDays,
   };
 }
 
@@ -3301,6 +3363,52 @@ function saveParentPin(pin) {
   localStorage.setItem(PARENT_PIN_KEY, JSON.stringify(pin));
 }
 
+function setLoginBonusSettingsMessage(message, isError = false) {
+  const element = document.querySelector("[data-login-bonus-settings-message]");
+  if (!element) {
+    return;
+  }
+
+  element.textContent = message;
+  element.classList.toggle("is-error", isError);
+}
+
+function renderLoginBonusSettingsForm() {
+  const form = document.querySelector("[data-login-bonus-settings-form]");
+  if (!form) {
+    return;
+  }
+
+  const settings = normalizeLoginBonusSettings(loginBonusSettings);
+  form.elements.dailyEnabled.checked = settings.dailyEnabled;
+  form.elements.dailyXp.value = settings.dailyXp;
+  form.elements.dailyGold.value = settings.dailyGold;
+  form.elements.streakEnabled.checked = settings.streakEnabled;
+  form.elements.streakIntervalDays.value = settings.streakIntervalDays;
+  form.elements.streakXp.value = settings.streakXp;
+  form.elements.streakGold.value = settings.streakGold;
+}
+
+function handleLoginBonusSettingsSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+
+  loginBonusSettings = normalizeLoginBonusSettings({
+    dailyEnabled: formData.get("dailyEnabled") === "on",
+    dailyXp: formData.get("dailyXp"),
+    dailyGold: formData.get("dailyGold"),
+    streakEnabled: formData.get("streakEnabled") === "on",
+    streakIntervalDays: formData.get("streakIntervalDays"),
+    streakXp: formData.get("streakXp"),
+    streakGold: formData.get("streakGold"),
+  });
+
+  saveLoginBonusSettings();
+  renderLoginBonusSettingsForm();
+  setLoginBonusSettingsMessage("ログインボーナス設定を保存しました");
+}
+
 function devLevelUp() {
   const previousLevel = getLevel(progress.xp);
   const previousLevelProgress = getLevelProgressPercent(progress.xp);
@@ -4744,6 +4852,13 @@ function playLoginBonusToast(message, duration = TOAST_DURATION) {
   });
 }
 
+function formatBonusRewardText(xp, gold) {
+  return [
+    xp > 0 ? `XP +${xp}` : "",
+    gold > 0 ? `Gold +${gold}` : "",
+  ].filter(Boolean).join(" / ");
+}
+
 function showAppReminderToast() {
   const toast = document.querySelector("[data-app-reminder-toast]");
   if (!toast || isParentMode) {
@@ -4762,12 +4877,18 @@ function showAppReminderToast() {
 }
 
 function showLoginBonusToast(loginBonusResult) {
-  playSound("gold");
-  playLoginBonusToast(`ログインボーナス！ Gold +${LOGIN_BONUS_GOLD}`);
+  const dailyText = formatBonusRewardText(loginBonusResult?.dailyXp || 0, loginBonusResult?.dailyGold || 0);
+  if (loginBonusResult?.dailyGold > 0) {
+    playSound("gold");
+  }
+  if (dailyText) {
+    playLoginBonusToast(`ログインボーナス！ ${dailyText}`);
+  }
 
   if (loginBonusResult?.streakBonus) {
+    const streakText = formatBonusRewardText(loginBonusResult.streakXp || 0, loginBonusResult.streakGold || 0);
     window.setTimeout(() => {
-      playLoginBonusToast(`7日連続ログイン達成！ Gold +${LOGIN_STREAK_BONUS_GOLD}`);
+      playLoginBonusToast(`${loginBonusResult.streakIntervalDays}日連続ログイン達成！ ${streakText}`);
     }, TOAST_DURATION);
   }
 }
@@ -5174,6 +5295,7 @@ function render() {
   renderQuestManager();
   renderRewardManager();
   renderRewardHistory();
+  renderLoginBonusSettingsForm();
 }
 
 document.querySelector("[data-character-image]")?.addEventListener("load", (event) => {
@@ -5482,6 +5604,7 @@ document.querySelector("[data-screen='quests']")?.addEventListener(
 
 document.querySelector("[data-parent-auth-form]")?.addEventListener("submit", handleParentAuthSubmit);
 document.querySelector("[data-pin-change-form]")?.addEventListener("submit", handlePinChangeSubmit);
+document.querySelector("[data-login-bonus-settings-form]")?.addEventListener("submit", handleLoginBonusSettingsSubmit);
 document.querySelector("[data-quest-create-form]")?.addEventListener("submit", handleQuestCreateSubmit);
 document.querySelector("[data-reward-create-form]")?.addEventListener("submit", handleRewardCreateSubmit);
 document.querySelector("[data-parent-note-form]")?.addEventListener("submit", handleParentNoteSubmit);

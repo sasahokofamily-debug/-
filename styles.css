@@ -4682,6 +4682,26 @@ h3 {
   line-height: 1.55;
 }
 
+.future-form .setting-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border: 1px solid rgba(201, 154, 53, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--wood-dark);
+  background: rgba(255, 247, 223, 0.48);
+}
+
+.future-form .setting-check input {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
 .backup-panel p {
   margin: 0;
   color: var(--muted);

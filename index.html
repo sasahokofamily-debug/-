@@ -549,6 +549,49 @@
               </div>
               <p>通知URLはアプリ内の定数で管理しています。メール通知と週間レポート送信は既存設定を使用します。</p>
             </section>
+          <section class="admin-section admin-section-login-bonus" aria-labelledby="login-bonus-settings-title">
+            <div class="admin-section-heading">
+              <p class="section-kicker">Login Bonus</p>
+              <h3 id="login-bonus-settings-title">ログインボーナス設定</h3>
+            </div>
+          <form class="future-form login-bonus-settings-form" data-login-bonus-settings-form aria-label="ログインボーナス設定フォーム">
+            <p>アプリを開いた日に付与するXPとGold、連続ログイン時の追加ボーナスを調整できます。</p>
+            <label class="setting-check">
+              <input type="checkbox" name="dailyEnabled">
+              <span>ログインボーナスON</span>
+            </label>
+            <div class="reward-input-grid">
+              <label>
+                1日ログイン XP
+                <input type="number" name="dailyXp" inputmode="numeric" min="0" max="999" placeholder="5" required>
+              </label>
+              <label>
+                1日ログイン Gold
+                <input type="number" name="dailyGold" inputmode="numeric" min="0" max="999" placeholder="5" required>
+              </label>
+            </div>
+            <label class="setting-check">
+              <input type="checkbox" name="streakEnabled">
+              <span>連続ログインボーナスON</span>
+            </label>
+            <label>
+              連続ログイン何日ごと
+              <input type="number" name="streakIntervalDays" inputmode="numeric" min="1" max="365" placeholder="7" required>
+            </label>
+            <div class="reward-input-grid">
+              <label>
+                追加XP
+                <input type="number" name="streakXp" inputmode="numeric" min="0" max="999" placeholder="20" required>
+              </label>
+              <label>
+                追加Gold
+                <input type="number" name="streakGold" inputmode="numeric" min="0" max="999" placeholder="20" required>
+              </label>
+            </div>
+            <p class="form-message" data-login-bonus-settings-message aria-live="polite"></p>
+            <button type="submit">設定を保存</button>
+          </form>
+          </section>
           <section class="future-form weekly-report-admin-panel" data-parent-mode-only aria-labelledby="weekly-report-admin-title" hidden>
             <h3 id="weekly-report-admin-title">週間レポート送信</h3>
             <p>現在の週間レポートをGoogle Apps Scriptへ送信します。GAS連携のテストに使えます。</p>
